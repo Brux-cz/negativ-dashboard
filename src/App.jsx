@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Map, Mountain, Building2, Home, Layers, Sparkles, Camera, FolderOpen, ChevronRight, Settings, Download, Zap, Box, Check, X, Plus, Upload, RefreshCw, MapPin, Square, Crosshair } from 'lucide-react';
 import { MapContainer, TileLayer, useMap, useMapEvents, Rectangle } from 'react-leaflet';
+import { toPng } from 'html-to-image';
 
 const tools = [
   { id: 'ortho', name: 'Ortho Map', subtitle: 'Download & Process', description: 'Stažení ortofoto mapy s automatickým odstraněním stínů přes ComfyUI.', icon: Map, category: 'data', status: 'ready' },
@@ -127,11 +128,12 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   const [resolution, setResolution] = useState('high');
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const mapContainerRef = useRef(null);
 
   const resolutions = [
-    { id: 'low', name: 'Nízká', pixels: '1024×1024', desc: 'Rychlé stažení' },
-    { id: 'medium', name: 'Střední', pixels: '2048×2048', desc: 'Vyvážená kvalita' },
-    { id: 'high', name: 'Vysoká', pixels: '4096×4096', desc: 'Maximální detail' },
+    { id: 'low', name: 'Nízká', pixels: '1024×1024', size: 1024, desc: 'Rychlé stažení' },
+    { id: 'medium', name: 'Střední', pixels: '2048×2048', size: 2048, desc: 'Vyvážená kvalita' },
+    { id: 'high', name: 'Vysoká', pixels: '4096×4096', size: 4096, desc: 'Maximální detail' },
   ];
 
   const handleSearch = () => {
@@ -150,25 +152,48 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleDownload = () => {
-    if (!bounds) return;
-    setDownloading(true);
-    setDownloadProgress(0);
+  const handleDownload = async () => {
+    const mapElement = mapContainerRef.current?.querySelector('.leaflet-container');
+    if (!mapElement) return;
 
-    // Simulate download progress
-    const interval = setInterval(() => {
-      setDownloadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setDownloading(false);
-            setDownloadProgress(0);
-          }, 500);
-          return 100;
+    setDownloading(true);
+    setDownloadProgress(10);
+
+    try {
+      const selectedRes = resolutions.find(r => r.id === resolution);
+      const pixelRatio = selectedRes.size / Math.max(mapElement.offsetWidth, mapElement.offsetHeight);
+
+      setDownloadProgress(30);
+
+      const dataUrl = await toPng(mapElement, {
+        cacheBust: true,
+        pixelRatio: Math.min(pixelRatio, 4),
+        filter: (node) => {
+          // Filter out UI overlays
+          if (node.classList?.contains('leaflet-control-container')) return false;
+          return true;
         }
-        return prev + Math.random() * 15;
       });
-    }, 200);
+
+      setDownloadProgress(80);
+
+      // Create download link
+      const link = document.createElement('a');
+      link.download = `ortho-map-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+
+      setDownloadProgress(100);
+
+      setTimeout(() => {
+        setDownloading(false);
+        setDownloadProgress(0);
+      }, 500);
+    } catch (error) {
+      console.error('Download failed:', error);
+      setDownloading(false);
+      setDownloadProgress(0);
+    }
   };
 
   const getBoundsInfo = () => {
@@ -209,7 +234,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
         {/* Content */}
         <div className="flex flex-1 overflow-hidden">
           {/* Map */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative" ref={mapContainerRef}>
             <MapContainer
               center={mapCenter}
               zoom={mapZoom}
@@ -326,18 +351,15 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               ) : (
                 <button
                   onClick={handleDownload}
-                  disabled={!bounds}
-                  className="w-full py-2.5 bg-neutral-900 text-white text-sm rounded-sm hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-2.5 bg-neutral-900 text-white text-sm rounded-sm hover:bg-neutral-800 flex items-center justify-center gap-2 transition-colors"
                 >
                   <Download className="w-4 h-4" />
                   Stáhnout ortofoto
                 </button>
               )}
-              {!bounds && (
-                <p className="text-[10px] text-neutral-400 text-center mt-2">
-                  Vyberte oblast na mapě pomocí Shift + táhnutí
-                </p>
-              )}
+              <p className="text-[10px] text-neutral-400 text-center mt-2">
+                Stáhne viditelnou oblast mapy jako PNG
+              </p>
             </div>
           </div>
         </div>
