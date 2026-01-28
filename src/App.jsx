@@ -167,9 +167,11 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   ];
 
   const tileZooms = [
-    { value: 17, label: '17', desc: '~1.2 km/tile' },
-    { value: 18, label: '18', desc: '~600 m/tile' },
-    { value: 19, label: '19', desc: '~300 m/tile' },
+    { value: 17, label: '17', desc: '~1.2 km' },
+    { value: 18, label: '18', desc: '~600 m' },
+    { value: 19, label: '19', desc: '~300 m' },
+    { value: 20, label: '20', desc: '~150 m' },
+    { value: 21, label: '21', desc: '~75 m' },
   ];
 
   const handleMapClick = useCallback((latlng) => {
@@ -311,7 +313,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
             >
               <TileLayer
                 url={selectedSource.url}
-                maxZoom={19}
+                maxZoom={21}
               />
               <MapClickHandler onMapClick={handleMapClick} />
 
@@ -391,19 +393,19 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 <label className="text-xs font-medium text-neutral-700">Tile Zoom (detail)</label>
                 <Lock className="w-3 h-3 text-neutral-400" />
               </div>
-              <div className="flex gap-1.5">
+              <div className="grid grid-cols-5 gap-1">
                 {tileZooms.map(z => (
                   <button
                     key={z.value}
                     onClick={() => setTileZoom(z.value)}
-                    className={`flex-1 p-2.5 rounded-sm border text-center transition-all ${
+                    className={`p-2 rounded-sm border text-center transition-all ${
                       tileZoom === z.value
                         ? 'border-neutral-900 bg-neutral-50'
                         : 'border-neutral-200 hover:border-neutral-400'
                     }`}
                   >
-                    <div className="text-sm font-bold text-neutral-900">{z.label}</div>
-                    <div className="text-[9px] text-neutral-400">{z.desc}</div>
+                    <div className="text-xs font-bold text-neutral-900">{z.label}</div>
+                    <div className="text-[8px] text-neutral-400">{z.desc}</div>
                   </button>
                 ))}
               </div>
