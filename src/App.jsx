@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Map, Mountain, Building2, Home, Layers, Sparkles, Camera, FolderOpen, ChevronRight, Settings, Download, Zap, Box, Check, X, Plus, Upload, RefreshCw } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Map, Mountain, Building2, Home, Layers, Sparkles, Camera, FolderOpen, ChevronRight, Settings, Download, Zap, Box, Check, X, Plus, Upload, RefreshCw, MapPin, Square, Crosshair } from 'lucide-react';
+import { MapContainer, TileLayer, useMap, useMapEvents, Rectangle } from 'react-leaflet';
 
 const tools = [
   { id: 'ortho', name: 'Ortho Map', subtitle: 'Download & Process', description: 'Stažení ortofoto mapy s automatickým odstraněním stínů přes ComfyUI.', icon: Map, category: 'data', status: 'ready' },
@@ -64,6 +65,284 @@ const ToolCard = ({ tool, onClick }) => {
         <ChevronRight className="w-4 h-4 text-neutral-400" />
       </div>
     </button>
+  );
+};
+
+// Ortho Map Sources
+const orthoSources = [
+  { id: 'esri', name: 'Esri World Imagery', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Esri' },
+  { id: 'google', name: 'Google Satellite', url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attribution: 'Google' },
+  { id: 'cuzk', name: 'ČÚZK Ortofoto', url: 'https://geoportal.cuzk.cz/WMS_ORTOFOTO_PUB/service.svc/get?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=GR_ORTFOTORGB&CRS=EPSG:3857&STYLES=&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}', attribution: 'ČÚZK', isWMS: true },
+];
+
+// Map selection component
+const SelectionRectangle = ({ bounds, setBounds }) => {
+  const [selecting, setSelecting] = useState(false);
+  const [startPoint, setStartPoint] = useState(null);
+
+  useMapEvents({
+    mousedown(e) {
+      if (e.originalEvent.shiftKey) {
+        setSelecting(true);
+        setStartPoint(e.latlng);
+        setBounds(null);
+      }
+    },
+    mousemove(e) {
+      if (selecting && startPoint) {
+        setBounds([[startPoint.lat, startPoint.lng], [e.latlng.lat, e.latlng.lng]]);
+      }
+    },
+    mouseup() {
+      setSelecting(false);
+      setStartPoint(null);
+    }
+  });
+
+  return bounds ? (
+    <Rectangle
+      bounds={bounds}
+      pathOptions={{ color: '#171717', weight: 2, fillColor: '#171717', fillOpacity: 0.1, dashArray: '5, 5' }}
+    />
+  ) : null;
+};
+
+// Center map on coordinates
+const MapController = ({ center, zoom }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.setView(center, zoom || map.getZoom());
+    }
+  }, [center, zoom, map]);
+  return null;
+};
+
+const OrthoMapModal = ({ isOpen, onClose }) => {
+  const [selectedSource, setSelectedSource] = useState(orthoSources[0]);
+  const [bounds, setBounds] = useState(null);
+  const [mapCenter, setMapCenter] = useState([50.0755, 14.4378]); // Prague
+  const [mapZoom, setMapZoom] = useState(14);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [resolution, setResolution] = useState('high');
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+
+  const resolutions = [
+    { id: 'low', name: 'Nízká', pixels: '1024×1024', desc: 'Rychlé stažení' },
+    { id: 'medium', name: 'Střední', pixels: '2048×2048', desc: 'Vyvážená kvalita' },
+    { id: 'high', name: 'Vysoká', pixels: '4096×4096', desc: 'Maximální detail' },
+  ];
+
+  const handleSearch = () => {
+    // Simple geocoding simulation - in production use real geocoding API
+    const locations = {
+      'praha': [50.0755, 14.4378],
+      'brno': [49.1951, 16.6068],
+      'ostrava': [49.8209, 18.2625],
+      'plzen': [49.7384, 13.3736],
+      'liberec': [50.7663, 15.0543],
+    };
+    const query = searchQuery.toLowerCase().trim();
+    if (locations[query]) {
+      setMapCenter(locations[query]);
+      setMapZoom(15);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!bounds) return;
+    setDownloading(true);
+    setDownloadProgress(0);
+
+    // Simulate download progress
+    const interval = setInterval(() => {
+      setDownloadProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setTimeout(() => {
+            setDownloading(false);
+            setDownloadProgress(0);
+          }, 500);
+          return 100;
+        }
+        return prev + Math.random() * 15;
+      });
+    }, 200);
+  };
+
+  const getBoundsInfo = () => {
+    if (!bounds) return null;
+    const [[lat1, lng1], [lat2, lng2]] = bounds;
+    const latDiff = Math.abs(lat2 - lat1) * 111; // km
+    const lngDiff = Math.abs(lng2 - lng1) * 111 * Math.cos((lat1 + lat2) / 2 * Math.PI / 180); // km
+    return {
+      area: (latDiff * lngDiff).toFixed(2),
+      width: lngDiff.toFixed(2),
+      height: latDiff.toFixed(2),
+    };
+  };
+
+  if (!isOpen) return null;
+
+  const boundsInfo = getBoundsInfo();
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-sm w-full max-w-4xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="p-4 border-b border-neutral-200 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-neutral-900 rounded-sm flex items-center justify-center">
+              <Map className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-medium">Ortho Map</h2>
+              <p className="text-[10px] text-neutral-400">Stažení ortofoto mapy</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Map */}
+          <div className="flex-1 relative">
+            <MapContainer
+              center={mapCenter}
+              zoom={mapZoom}
+              className="h-full w-full"
+              style={{ minHeight: '400px' }}
+            >
+              <TileLayer
+                url={selectedSource.url}
+                attribution={selectedSource.attribution}
+                maxZoom={19}
+              />
+              <SelectionRectangle bounds={bounds} setBounds={setBounds} />
+              <MapController center={mapCenter} zoom={mapZoom} />
+            </MapContainer>
+
+            {/* Map overlay instructions */}
+            <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-sm text-xs text-neutral-600 shadow-sm">
+              <kbd className="px-1.5 py-0.5 bg-neutral-100 rounded text-[10px] font-mono">Shift</kbd> + táhni pro výběr oblasti
+            </div>
+
+            {/* Bounds info overlay */}
+            {boundsInfo && (
+              <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-sm shadow-sm">
+                <div className="text-[10px] text-neutral-400 mb-0.5">Vybraná oblast</div>
+                <div className="text-xs font-medium text-neutral-900">
+                  {boundsInfo.width} × {boundsInfo.height} km ({boundsInfo.area} km²)
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="w-72 border-l border-neutral-200 p-4 overflow-y-auto shrink-0">
+            {/* Search */}
+            <div className="mb-5">
+              <label className="text-xs font-medium text-neutral-700 mb-1.5 block">Hledat místo</label>
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                  placeholder="Praha, Brno..."
+                  className="flex-1 px-2.5 py-1.5 text-sm border border-neutral-200 rounded-sm focus:outline-none focus:border-neutral-400"
+                />
+                <button
+                  onClick={handleSearch}
+                  className="px-2.5 py-1.5 bg-neutral-100 rounded-sm hover:bg-neutral-200 transition-colors"
+                >
+                  <MapPin className="w-4 h-4 text-neutral-600" />
+                </button>
+              </div>
+            </div>
+
+            {/* Source selection */}
+            <div className="mb-5">
+              <label className="text-xs font-medium text-neutral-700 mb-1.5 block">Mapový zdroj</label>
+              <div className="space-y-1.5">
+                {orthoSources.map(source => (
+                  <button
+                    key={source.id}
+                    onClick={() => setSelectedSource(source)}
+                    className={`w-full p-2.5 rounded-sm border text-left transition-all ${
+                      selectedSource.id === source.id
+                        ? 'border-neutral-900 bg-neutral-50'
+                        : 'border-neutral-200 hover:border-neutral-400'
+                    }`}
+                  >
+                    <div className="text-xs font-medium text-neutral-900">{source.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Resolution */}
+            <div className="mb-5">
+              <label className="text-xs font-medium text-neutral-700 mb-1.5 block">Rozlišení</label>
+              <div className="space-y-1.5">
+                {resolutions.map(res => (
+                  <button
+                    key={res.id}
+                    onClick={() => setResolution(res.id)}
+                    className={`w-full p-2.5 rounded-sm border text-left transition-all ${
+                      resolution === res.id
+                        ? 'border-neutral-900 bg-neutral-50'
+                        : 'border-neutral-200 hover:border-neutral-400'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-medium text-neutral-900">{res.name}</div>
+                      <div className="text-[10px] font-mono text-neutral-400">{res.pixels}</div>
+                    </div>
+                    <div className="text-[10px] text-neutral-400">{res.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Download button */}
+            <div className="pt-4 border-t border-neutral-100">
+              {downloading ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-neutral-600">Stahování...</span>
+                    <span className="text-neutral-400">{Math.round(downloadProgress)}%</span>
+                  </div>
+                  <div className="w-full bg-neutral-100 rounded-full h-1.5">
+                    <div
+                      className="bg-neutral-900 h-1.5 rounded-full transition-all"
+                      style={{ width: `${downloadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={handleDownload}
+                  disabled={!bounds}
+                  className="w-full py-2.5 bg-neutral-900 text-white text-sm rounded-sm hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Stáhnout ortofoto
+                </button>
+              )}
+              {!bounds && (
+                <p className="text-[10px] text-neutral-400 text-center mt-2">
+                  Vyberte oblast na mapě pomocí Shift + táhnutí
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -133,11 +412,13 @@ export default function App() {
   const [activeProject, setActiveProject] = useState(projects[0]);
   const [showBuildingModal, setShowBuildingModal] = useState(false);
   const [showAtmosphereModal, setShowAtmosphereModal] = useState(false);
+  const [showOrthoModal, setShowOrthoModal] = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
-  
-  const handleToolClick = (id) => { 
-    if (id === 'building-gen') setShowBuildingModal(true); 
-    else if (id === 'atmosphere') setShowAtmosphereModal(true); 
+
+  const handleToolClick = (id) => {
+    if (id === 'building-gen') setShowBuildingModal(true);
+    else if (id === 'atmosphere') setShowAtmosphereModal(true);
+    else if (id === 'ortho') setShowOrthoModal(true);
   };
   
   const filteredTools = activeCategory === 'all' ? tools : tools.filter(t => t.category === activeCategory);
@@ -257,6 +538,7 @@ export default function App() {
       
       <AIBuildingModal isOpen={showBuildingModal} onClose={() => setShowBuildingModal(false)} />
       <AtmosphereModal isOpen={showAtmosphereModal} onClose={() => setShowAtmosphereModal(false)} />
+      <OrthoMapModal isOpen={showOrthoModal} onClose={() => setShowOrthoModal(false)} />
     </div>
   );
 }
