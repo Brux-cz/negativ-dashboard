@@ -71,7 +71,6 @@ const ToolCard = ({ tool, onClick }) => {
 
 // Ortho Map Sources - tile URL patterns
 const orthoSources = [
-  { id: 'esri', name: 'Esri World Imagery', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', tileUrl: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}` },
   { id: 'google', name: 'Google Satellite', url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', tileUrl: (z, x, y) => `https://mt1.google.com/vt/lyrs=s&x=${x}&y=${y}&z=${z}` },
 ];
 
@@ -158,11 +157,13 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize]);
 
-  const gridSizes = [
-    { value: 3, label: '3×3', tiles: 9, desc: 'Malý' },
-    { value: 5, label: '5×5', tiles: 25, desc: 'Střední' },
-    { value: 7, label: '7×7', tiles: 49, desc: 'Velký' },
-    { value: 9, label: '9×9', tiles: 81, desc: 'Extra' },
+  // Pixel sizes (must be odd number of tiles for center alignment)
+  const pixelSizes = [
+    { value: 5, pixels: 1280, label: '1280 px' },
+    { value: 7, pixels: 1792, label: '1792 px' },
+    { value: 9, pixels: 2304, label: '2304 px' },
+    { value: 11, pixels: 2816, label: '2816 px' },
+    { value: 15, pixels: 3840, label: '3840 px' },
   ];
 
   const tileZooms = [
@@ -379,24 +380,9 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               </div>
             </div>
 
-            {/* Source selection */}
-            <div className="mb-5">
-              <label className="text-xs font-medium text-neutral-700 mb-1.5 block">Mapový zdroj</label>
-              <div className="flex gap-1.5">
-                {orthoSources.map(source => (
-                  <button
-                    key={source.id}
-                    onClick={() => setSelectedSource(source)}
-                    className={`flex-1 p-2 rounded-sm border text-center transition-all ${
-                      selectedSource.id === source.id
-                        ? 'border-neutral-900 bg-neutral-50'
-                        : 'border-neutral-200 hover:border-neutral-400'
-                    }`}
-                  >
-                    <div className="text-[11px] font-medium text-neutral-900">{source.name.split(' ')[0]}</div>
-                  </button>
-                ))}
-              </div>
+            {/* Source info */}
+            <div className="mb-5 p-2 bg-neutral-50 rounded-sm">
+              <div className="text-[10px] text-neutral-400">Zdroj: <span className="text-neutral-700 font-medium">Google Satellite</span></div>
             </div>
 
             {/* Tile Zoom (detail level) */}
@@ -426,22 +412,22 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               </p>
             </div>
 
-            {/* Grid size */}
+            {/* Pixel size */}
             <div className="mb-5">
-              <label className="text-xs font-medium text-neutral-700 mb-1.5 block">Velikost výřezu</label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {gridSizes.map(g => (
+              <label className="text-xs font-medium text-neutral-700 mb-1.5 block">Velikost výřezu (px)</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {pixelSizes.map(p => (
                   <button
-                    key={g.value}
-                    onClick={() => setGridSize(g.value)}
+                    key={p.value}
+                    onClick={() => setGridSize(p.value)}
                     className={`p-2 rounded-sm border text-center transition-all ${
-                      gridSize === g.value
+                      gridSize === p.value
                         ? 'border-neutral-900 bg-neutral-50'
                         : 'border-neutral-200 hover:border-neutral-400'
                     }`}
                   >
-                    <div className="text-xs font-bold text-neutral-900">{g.label}</div>
-                    <div className="text-[9px] text-neutral-400">{g.tiles} tiles</div>
+                    <div className="text-xs font-bold text-neutral-900">{p.label}</div>
+                    <div className="text-[9px] text-neutral-400">{p.value}×{p.value} tiles</div>
                   </button>
                 ))}
               </div>
