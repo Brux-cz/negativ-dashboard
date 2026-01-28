@@ -108,12 +108,23 @@ const getTileBounds = (center, tileZoom, gridSize) => {
 };
 
 // Map click handler component
-const MapClickHandler = ({ onMapClick }) => {
+const MapClickHandler = ({ onMapClick, onZoomChange }) => {
+  const map = useMap();
+
   useMapEvents({
     click(e) {
       onMapClick([e.latlng.lat, e.latlng.lng]);
+    },
+    zoomend() {
+      onZoomChange(map.getZoom());
     }
   });
+
+  // Report initial zoom
+  useEffect(() => {
+    onZoomChange(map.getZoom());
+  }, [map, onZoomChange]);
+
   return null;
 };
 
@@ -143,6 +154,11 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentMapZoom, setCurrentMapZoom] = useState(14);
+
+  const handleZoomChange = useCallback((zoom) => {
+    setCurrentMapZoom(Math.round(zoom));
+  }, []);
 
   // Save settings to localStorage
   useEffect(() => {
@@ -315,7 +331,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 url={selectedSource.url}
                 maxZoom={21}
               />
-              <MapClickHandler onMapClick={handleMapClick} />
+              <MapClickHandler onMapClick={handleMapClick} onZoomChange={handleZoomChange} />
 
               {/* Center marker */}
               {center && (
@@ -387,11 +403,30 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               <div className="text-[10px] text-neutral-400">Zdroj: <span className="text-neutral-700 font-medium">Google Satellite</span></div>
             </div>
 
+            {/* Current map zoom display */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-blue-600 uppercase tracking-wider">Aktuální zoom mapy</div>
+                  <div className="text-lg font-bold text-blue-900">{currentMapZoom}</div>
+                </div>
+                <button
+                  onClick={() => setTileZoom(Math.min(21, Math.max(17, currentMapZoom)))}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-sm hover:bg-blue-700 transition-colors"
+                >
+                  Použít
+                </button>
+              </div>
+              <p className="text-[10px] text-blue-500 mt-1">
+                Přibliž/oddaluj mapu pro změnu detailu
+              </p>
+            </div>
+
             {/* Tile Zoom (detail level) */}
             <div className="mb-5">
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-neutral-700">Tile Zoom (detail)</label>
-                <Lock className="w-3 h-3 text-neutral-400" />
+                <label className="text-xs font-medium text-neutral-700">Tile Zoom pro stažení</label>
+                <span className="text-xs font-mono text-neutral-500">{tileZoom}</span>
               </div>
               <div className="grid grid-cols-5 gap-1">
                 {tileZooms.map(z => (
@@ -401,6 +436,8 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                     className={`p-2 rounded-sm border text-center transition-all ${
                       tileZoom === z.value
                         ? 'border-neutral-900 bg-neutral-50'
+                        : currentMapZoom === z.value
+                        ? 'border-blue-400 bg-blue-50'
                         : 'border-neutral-200 hover:border-neutral-400'
                     }`}
                   >
@@ -410,7 +447,9 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 ))}
               </div>
               <p className="text-[10px] text-neutral-400 mt-1.5">
-                Určuje detail stahovaných tiles (nezávislý na zobrazení)
+                {tileZoom === currentMapZoom
+                  ? '✓ Stahuje se stejný detail jako vidíš'
+                  : `Stahuje zoom ${tileZoom}, zobrazuješ zoom ${currentMapZoom}`}
               </p>
             </div>
 
