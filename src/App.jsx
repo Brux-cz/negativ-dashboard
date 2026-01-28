@@ -175,11 +175,12 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
 
   // Pixel sizes (must be odd number of tiles for center alignment)
   const pixelSizes = [
-    { value: 5, pixels: 1280, label: '1280 px' },
     { value: 7, pixels: 1792, label: '1792 px' },
-    { value: 9, pixels: 2304, label: '2304 px' },
     { value: 11, pixels: 2816, label: '2816 px' },
     { value: 15, pixels: 3840, label: '3840 px' },
+    { value: 21, pixels: 5376, label: '5376 px' },
+    { value: 31, pixels: 7936, label: '7936 px' },
+    { value: 41, pixels: 10496, label: '10496 px' },
   ];
 
   const tileZooms = [
@@ -456,7 +457,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
             {/* Pixel size */}
             <div className="mb-5">
               <label className="text-xs font-medium text-neutral-700 mb-1.5 block">Velikost výřezu (px)</label>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 {pixelSizes.map(p => (
                   <button
                     key={p.value}
@@ -468,10 +469,15 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                     }`}
                   >
                     <div className="text-xs font-bold text-neutral-900">{p.label}</div>
-                    <div className="text-[9px] text-neutral-400">{p.value}×{p.value} tiles</div>
+                    <div className="text-[9px] text-neutral-400">{p.value * p.value} tiles</div>
                   </button>
                 ))}
               </div>
+              {gridSize > 20 && (
+                <p className="text-[10px] text-amber-600 mt-1.5">
+                  ⚠ Velký výřez - stahování může trvat déle
+                </p>
+              )}
             </div>
 
             {/* Output info */}
