@@ -1745,10 +1745,10 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                       <div
                         style={{
                           position: 'fixed',
-                          right: '20px',
+                          right: '30px',
                           top: '50%',
                           transform: 'translateY(-50%)',
-                          zIndex: 100,
+                          zIndex: 10000,
                         }}
                       >
                         {!showHint ? (
@@ -1769,18 +1769,19 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                             style={{
                               fontFamily: 'Georgia, serif',
                               fontStyle: 'italic',
-                              fontSize: '18px',
-                              color: 'rgba(255,255,255,0.4)',
-                              background: 'transparent',
-                              border: 'none',
+                              fontSize: '20px',
+                              color: 'rgba(255,255,255,0.6)',
+                              background: 'rgba(0,0,0,0.3)',
+                              border: '2px solid rgba(255,255,255,0.3)',
+                              borderRadius: '8px',
                               cursor: 'pointer',
                               writingMode: 'vertical-rl',
                               textOrientation: 'mixed',
-                              padding: '20px 10px',
+                              padding: '20px 12px',
                               transition: 'all 0.3s ease',
                             }}
-                            onMouseOver={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
-                            onMouseOut={e => e.target.style.color = 'rgba(255,255,255,0.4)'}
+                            onMouseOver={e => { e.target.style.color = '#fff'; e.target.style.background = 'rgba(0,0,0,0.6)'; }}
+                            onMouseOut={e => { e.target.style.color = 'rgba(255,255,255,0.6)'; e.target.style.background = 'rgba(0,0,0,0.3)'; }}
                           >
                             nápověda
                           </button>
