@@ -653,16 +653,16 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
 
   // Questions about Petr
   const petrQuestions = useMemo(() => [
-    { id: 1, question: "Jak se jmenuje Petrův pes?", answer: "gaia", hint: "🐕" },
-    { id: 2, question: "Jaké bylo první zvíře které Petr měl?", answer: "želva", hint: "🐢" },
-    { id: 3, question: "Který den v měsíci má Petr narozeniny?", answer: "31", hint: "📅" },
-    { id: 4, question: "Jak se jmenuje Petrova babička?", answer: "svatava", hint: "👵" },
-    { id: 5, question: "Jaký je Petrův oblíbený seriál?", answer: "supernatural", hint: "📺" },
-    { id: 6, question: "Máte Petra rádi?", answer: "ano", hint: "❤️" },
-    { id: 7, question: "Ve které vesnici Petr bydlel?", answer: "hodkovice", hint: "🏠" },
-    { id: 8, question: "Jaká je Petrova oblíbená barva?", answer: "zelená", hint: "🎨" },
-    { id: 9, question: "Kolik má Petr sourozenců?", answer: "2", hint: "👫" },
-    { id: 10, question: "Jaké je Petrovo oblíbené jídlo?", answer: "křehká kachna", hint: "🦆" },
+    { id: 1, question: "Jak se jmenuje Petrův pes?", answer: "gaia" },
+    { id: 2, question: "Jaké bylo první zvíře které Petr měl?", answer: "želva" },
+    { id: 3, question: "Který den v měsíci má Petr narozeniny?", answer: "31" },
+    { id: 4, question: "Jak se jmenuje Petrova babička?", answer: "svatava" },
+    { id: 5, question: "Jaký je Petrův oblíbený seriál?", answer: "supernatural" },
+    { id: 6, question: "Máte Petra rádi?", answer: "ano" },
+    { id: 7, question: "Ve které vesnici Petr bydlel?", answer: "hodkovice" },
+    { id: 8, question: "Jaká je Petrova oblíbená barva?", answer: "zelená" },
+    { id: 9, question: "Kolik má Petr sourozenců?", answer: "2" },
+    { id: 10, question: "Jaké je Petrovo oblíbené jídlo?", answer: "křehká kachna" },
   ], []);
 
   // Drawing animation effect
@@ -1196,7 +1196,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       maxWidth: '500px',
                       padding: '0 20px',
                     }}>
-                      {quizQuestion.hint} {quizQuestion.question}
+                      {quizQuestion.question}
                     </div>
                     <input
                       type="text"
