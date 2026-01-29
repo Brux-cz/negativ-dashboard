@@ -246,25 +246,40 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
         }
       }
 
-      // Fetch and draw tiles
+      // Load tile using Image element (works better with CORS)
+      const loadTile = (tile) => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            ctx.drawImage(img, tile.canvasX, tile.canvasY, tileSize, tileSize);
+            resolve(true);
+          };
+          img.onerror = () => {
+            // Draw placeholder for failed tiles
+            ctx.fillStyle = '#e5e5e5';
+            ctx.fillRect(tile.canvasX, tile.canvasY, tileSize, tileSize);
+            ctx.fillStyle = '#a3a3a3';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('×', tile.canvasX + tileSize/2, tile.canvasY + tileSize/2 + 4);
+            resolve(false);
+          };
+          img.src = selectedSource.tileUrl(tileZoom, tile.x, tile.y);
+        });
+      };
+
+      // Download tiles in batches to avoid overwhelming the server
+      const batchSize = 10;
       let loaded = 0;
       const totalTiles = tiles.length;
 
-      await Promise.all(tiles.map(async (tile) => {
-        try {
-          const url = selectedSource.tileUrl(tileZoom, tile.x, tile.y);
-          const response = await fetch(url);
-          const blob = await response.blob();
-          const img = await createImageBitmap(blob);
-          ctx.drawImage(img, tile.canvasX, tile.canvasY, tileSize, tileSize);
-        } catch (e) {
-          // Draw placeholder for failed tiles
-          ctx.fillStyle = '#f5f5f5';
-          ctx.fillRect(tile.canvasX, tile.canvasY, tileSize, tileSize);
-        }
-        loaded++;
+      for (let i = 0; i < tiles.length; i += batchSize) {
+        const batch = tiles.slice(i, i + batchSize);
+        await Promise.all(batch.map(loadTile));
+        loaded += batch.length;
         setDownloadProgress((loaded / totalTiles) * 100);
-      }));
+      }
 
       // Download canvas as PNG
       canvas.toBlob((blob) => {
@@ -300,8 +315,8 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   const areaInfo = getAreaInfo();
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-sm w-full max-w-5xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2" onClick={onClose}>
+      <div className="bg-white rounded-sm w-full max-w-7xl shadow-2xl overflow-hidden h-[95vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-4 border-b border-neutral-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
@@ -326,7 +341,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               center={mapView}
               zoom={mapZoom}
               className="h-full w-full"
-              style={{ minHeight: '500px' }}
+              style={{ minHeight: '700px' }}
             >
               <TileLayer
                 url={selectedSource.url}
