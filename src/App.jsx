@@ -657,6 +657,12 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   const [mathScore, setMathScore] = useState(0);
   const [gameWon, setGameWon] = useState(false);
 
+  // Lottery state for game selection
+  const [isLottery, setIsLottery] = useState(false);
+  const [lotteryIndex, setLotteryIndex] = useState(0);
+  const [lotterySpeed, setLotterySpeed] = useState(50);
+  const [lotteryDone, setLotteryDone] = useState(false);
+
   const isEasterEggDismissed = searchQuery.toLowerCase().includes('hodkovice');
 
   // Questions about Petr
@@ -844,6 +850,82 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     { id: 'math', name: '🔢 MATEMATICKÝ BOSS', desc: 'Vyřeš 5 příkladů za 30s!' },
   ];
 
+  // Start lottery when mini-game section appears
+  useEffect(() => {
+    if (showMiniGame && !currentGame && !isLottery && !lotteryDone) {
+      setIsLottery(true);
+      setLotterySpeed(80);
+      setLotteryIndex(0);
+    }
+  }, [showMiniGame, currentGame, isLottery, lotteryDone]);
+
+  // Lottery animation effect
+  useEffect(() => {
+    if (!isLottery) return;
+
+    const timer = setTimeout(() => {
+      setLotteryIndex(prev => {
+        const nextIndex = (prev + 1) % miniGames.length;
+
+        // Check if we should stop
+        setLotterySpeed(currentSpeed => {
+          const newSpeed = currentSpeed * 1.08;
+          if (newSpeed > 800) {
+            setIsLottery(false);
+            setLotteryDone(true);
+            return currentSpeed;
+          }
+          return newSpeed;
+        });
+
+        return nextIndex;
+      });
+    }, lotterySpeed);
+
+    return () => clearTimeout(timer);
+  }, [isLottery, lotterySpeed, miniGames.length]);
+
+  // Start the selected game when lottery is done
+  useEffect(() => {
+    if (lotteryDone && !currentGame) {
+      const timer = setTimeout(() => {
+        const selectedGame = miniGames[lotteryIndex];
+        if (selectedGame) {
+          setCurrentGame(selectedGame.id);
+          setGameWon(false);
+
+          if (selectedGame.id === 'click') {
+            setClickCount(0);
+            setGameTimeLeft(5);
+          } else if (selectedGame.id === 'memory') {
+            const seq = Array.from({ length: 5 }, () => Math.floor(Math.random() * 4));
+            setMemorySequence(seq);
+            setPlayerSequence([]);
+            setMemoryShowIndex(0);
+          } else if (selectedGame.id === 'math') {
+            setMathScore(0);
+            setGameTimeLeft(30);
+            // Generate first math problem
+            const ops = ['+', '-', '*'];
+            const op = ops[Math.floor(Math.random() * ops.length)];
+            let a, b;
+            if (op === '*') {
+              a = Math.floor(Math.random() * 10) + 1;
+              b = Math.floor(Math.random() * 10) + 1;
+            } else {
+              a = Math.floor(Math.random() * 50) + 10;
+              b = Math.floor(Math.random() * 30) + 1;
+            }
+            const answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
+            setMathProblem({ a, b, op, answer });
+            setMathAnswer('');
+          }
+        }
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [lotteryDone, currentGame, lotteryIndex, miniGames]);
+
   const startGame = (gameId) => {
     setCurrentGame(gameId);
     setGameWon(false);
@@ -859,7 +941,20 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     } else if (gameId === 'math') {
       setMathScore(0);
       setGameTimeLeft(30);
-      generateMathProblem();
+      // Generate first math problem inline
+      const ops = ['+', '-', '*'];
+      const op = ops[Math.floor(Math.random() * ops.length)];
+      let a, b;
+      if (op === '*') {
+        a = Math.floor(Math.random() * 10) + 1;
+        b = Math.floor(Math.random() * 10) + 1;
+      } else {
+        a = Math.floor(Math.random() * 50) + 10;
+        b = Math.floor(Math.random() * 30) + 1;
+      }
+      const answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
+      setMathProblem({ a, b, op, answer });
+      setMathAnswer('');
     }
   };
 
@@ -1194,8 +1289,8 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               <div>
                 {!currentGame ? (
                   <>
-                    {/* Magic card selection */}
-                    <div style={{ fontSize: '80px', marginBottom: '20px', animation: 'pulse 3s ease-in-out infinite' }}>🃏</div>
+                    {/* Lottery game selection */}
+                    <div style={{ fontSize: '80px', marginBottom: '20px', animation: 'pulse 3s ease-in-out infinite' }}>🎰</div>
                     <div style={{
                       fontFamily: '"Comic Sans MS", cursive',
                       fontSize: '32px',
@@ -1206,36 +1301,65 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       marginBottom: '30px',
                       filter: 'drop-shadow(3px 3px 0px #000)',
                     }}>
-                      ✨ VYBER SI MINI HRU ✨
+                      {lotteryDone ? '🎯 VYLOSOVÁNO! 🎯' : '🎲 LOSUJI HRU... 🎲'}
                     </div>
-                    <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                      {miniGames.map((game, i) => (
-                        <button
-                          key={game.id}
-                          onClick={() => startGame(game.id)}
-                          style={{
-                            padding: '20px 30px',
-                            fontSize: '18px',
-                            fontFamily: '"Comic Sans MS", cursive',
-                            background: i === 0 ? 'linear-gradient(135deg, #ff00ff, #ff66ff)'
-                              : i === 1 ? 'linear-gradient(135deg, #00ffff, #66ffff)'
-                              : 'linear-gradient(135deg, #ffff00, #ffff66)',
-                            border: '4px solid #fff',
-                            borderRadius: '12px',
-                            color: i === 2 ? '#000' : '#fff',
-                            cursor: 'pointer',
-                            minWidth: '200px',
-                            transition: 'all 0.5s ease',
-                            boxShadow: '4px 4px 0px #000',
-                          }}
-                          onMouseOver={e => e.target.style.transform = 'scale(1.05)'}
-                          onMouseOut={e => e.target.style.transform = 'scale(1)'}
-                        >
-                          <div style={{ fontSize: '24px', marginBottom: '10px' }}>{game.name}</div>
-                          <div style={{ fontSize: '14px', opacity: 0.8 }}>{game.desc}</div>
-                        </button>
-                      ))}
+
+                    {/* Lottery cards flying */}
+                    <div style={{
+                      position: 'relative',
+                      width: '300px',
+                      height: '150px',
+                      margin: '0 auto',
+                      overflow: 'visible',
+                    }}>
+                      {miniGames.map((game, i) => {
+                        const isSelected = lotteryIndex === i;
+                        const colors = [
+                          'linear-gradient(135deg, #ff00ff, #ff66ff)',
+                          'linear-gradient(135deg, #00ffff, #66ffff)',
+                          'linear-gradient(135deg, #ffff00, #ffff66)',
+                        ];
+                        return (
+                          <div
+                            key={game.id}
+                            style={{
+                              position: 'absolute',
+                              left: '50%',
+                              top: '50%',
+                              transform: `translate(-50%, -50%) scale(${isSelected ? 1.3 : 0.7}) rotate(${isSelected ? 0 : (i - 1) * 15}deg)`,
+                              padding: '20px 30px',
+                              fontSize: '18px',
+                              fontFamily: '"Comic Sans MS", cursive',
+                              background: colors[i],
+                              border: isSelected ? '6px solid #fff' : '3px solid rgba(255,255,255,0.5)',
+                              borderRadius: '12px',
+                              color: i === 2 ? '#000' : '#fff',
+                              minWidth: '200px',
+                              textAlign: 'center',
+                              transition: `all ${lotterySpeed > 300 ? '0.3s' : '0.1s'} ease`,
+                              opacity: isSelected ? 1 : 0.3,
+                              boxShadow: isSelected ? '0 0 30px rgba(255,255,255,0.8), 4px 4px 0px #000' : '2px 2px 0px #000',
+                              zIndex: isSelected ? 10 : 1,
+                            }}
+                          >
+                            <div style={{ fontSize: '24px', marginBottom: '10px' }}>{game.name}</div>
+                            <div style={{ fontSize: '14px', opacity: 0.8 }}>{game.desc}</div>
+                          </div>
+                        );
+                      })}
                     </div>
+
+                    {lotteryDone && (
+                      <div style={{
+                        marginTop: '40px',
+                        fontFamily: '"Comic Sans MS", cursive',
+                        fontSize: '18px',
+                        color: '#00ff00',
+                        animation: 'pulse 0.5s ease infinite',
+                      }}>
+                        Připrav se...
+                      </div>
+                    )}
                   </>
                 ) : currentGame === 'click' ? (
                   <>
