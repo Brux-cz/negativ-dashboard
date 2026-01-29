@@ -635,14 +635,14 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose} ref={modalRef}>
-      {/* Windows 98 Easter Egg */}
+      {/* Windows 98 Easter Egg - PETR SVETR everywhere! */}
       {!isEasterEggDismissed && (
         <div
-          className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center"
+          className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden"
           style={{
             background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff0000, #00ff00, #0000ff)',
             backgroundSize: '400% 400%',
-            animation: 'rainbow 2s ease infinite',
+            animation: 'rainbow 1s ease infinite',
           }}
         >
           <style>{`
@@ -655,61 +655,98 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               0%, 49% { opacity: 1; }
               50%, 100% { opacity: 0; }
             }
+            @keyframes blink98fast {
+              0%, 30% { opacity: 1; color: #ff00ff; }
+              31%, 60% { opacity: 1; color: #00ffff; }
+              61%, 100% { opacity: 1; color: #ffff00; }
+            }
             @keyframes shake {
               0%, 100% { transform: translate(0, 0) rotate(0deg); }
-              25% { transform: translate(-10px, 10px) rotate(-5deg); }
-              50% { transform: translate(10px, -10px) rotate(5deg); }
-              75% { transform: translate(-10px, -10px) rotate(-5deg); }
+              10% { transform: translate(-15px, 15px) rotate(-8deg); }
+              20% { transform: translate(15px, -15px) rotate(8deg); }
+              30% { transform: translate(-15px, -15px) rotate(-8deg); }
+              40% { transform: translate(15px, 15px) rotate(8deg); }
+              50% { transform: translate(-15px, 15px) rotate(-8deg); }
+              60% { transform: translate(15px, -15px) rotate(8deg); }
+              70% { transform: translate(-15px, -15px) rotate(-8deg); }
+              80% { transform: translate(15px, 15px) rotate(8deg); }
+              90% { transform: translate(-15px, 15px) rotate(-8deg); }
             }
-            @keyframes pixelate {
-              0%, 100% { filter: blur(0px); }
-              50% { filter: blur(2px); }
+            @keyframes float {
+              0%, 100% { transform: translateY(0) rotate(0deg); }
+              50% { transform: translateY(-20px) rotate(5deg); }
             }
           `}</style>
-          <div
-            className="text-center"
-            style={{ animation: 'shake 0.3s ease infinite' }}
-          >
+
+          {/* PETR SVETR scattered everywhere */}
+          {[...Array(30)].map((_, i) => (
             <div
+              key={i}
               style={{
-                fontFamily: '"Comic Sans MS", "MS Sans Serif", cursive',
-                fontSize: '72px',
-                fontWeight: 'bold',
-                textShadow: '4px 4px 0 #000, -4px -4px 0 #ff00ff, 4px -4px 0 #00ffff, -4px 4px 0 #ffff00',
-                color: '#fff',
-                animation: 'blink98 0.5s step-end infinite',
-                imageRendering: 'pixelated',
-              }}
-            >
-              🎉 ADAMA ADAM 🎉
-            </div>
-            <div
-              style={{
+                position: 'absolute',
+                left: `${(i * 17) % 100}%`,
+                top: `${(i * 23) % 100}%`,
                 fontFamily: '"Comic Sans MS", cursive',
-                fontSize: '24px',
-                color: '#00ff00',
-                textShadow: '2px 2px 0 #000',
-                marginTop: '20px',
-                animation: 'blink98 0.3s step-end infinite',
+                fontSize: `${20 + (i % 4) * 15}px`,
+                fontWeight: 'bold',
+                color: ['#ff00ff', '#00ffff', '#ffff00', '#ff0000', '#00ff00'][i % 5],
+                textShadow: '3px 3px 0 #000',
+                animation: `blink98fast ${0.2 + (i % 5) * 0.1}s step-end infinite, float ${1 + (i % 3)}s ease-in-out infinite`,
+                animationDelay: `${i * 0.1}s`,
+                transform: `rotate(${(i * 30) % 360 - 180}deg)`,
               }}
             >
-              ★ WELCOME TO THE MATRIX ★
+              PETR SVETR
             </div>
-            <div
-              style={{
-                fontFamily: 'monospace',
-                fontSize: '14px',
-                color: '#ffff00',
-                marginTop: '40px',
-                background: 'rgba(0,0,0,0.8)',
-                padding: '10px',
-                border: '3px solid #ff00ff',
-              }}
-            >
-              💡 HINT: Napiš do vyhledávání kde bydlí autor... 💡
-            </div>
-            <div style={{ marginTop: '20px', fontSize: '48px', animation: 'blink98 0.2s step-end infinite' }}>
-              👾 🕹️ 💾 📟 🖥️ 👾
+          ))}
+
+          {/* Main center text */}
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ animation: 'shake 0.2s ease infinite' }}
+          >
+            <div className="text-center">
+              <div
+                style={{
+                  fontFamily: '"Comic Sans MS", cursive',
+                  fontSize: '100px',
+                  fontWeight: 'bold',
+                  textShadow: '6px 6px 0 #000, -6px -6px 0 #ff00ff, 6px -6px 0 #00ffff, -6px 6px 0 #ffff00',
+                  color: '#fff',
+                  animation: 'blink98 0.3s step-end infinite',
+                }}
+              >
+                🎉 PETR SVETR 🎉
+              </div>
+              <div
+                style={{
+                  fontFamily: '"Comic Sans MS", cursive',
+                  fontSize: '36px',
+                  color: '#00ff00',
+                  textShadow: '3px 3px 0 #000',
+                  marginTop: '20px',
+                  animation: 'blink98fast 0.2s step-end infinite',
+                }}
+              >
+                ★★★ VÍTEJTE V MATRIXU ★★★
+              </div>
+              <div
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: '18px',
+                  color: '#fff',
+                  marginTop: '40px',
+                  background: 'rgba(0,0,0,0.9)',
+                  padding: '15px 25px',
+                  border: '4px solid #ff00ff',
+                  animation: 'blink98 0.5s step-end infinite',
+                }}
+              >
+                💡 HINT: Napiš do vyhledávání kde bydlí autor... 💡
+              </div>
+              <div style={{ marginTop: '30px', fontSize: '60px', animation: 'blink98fast 0.15s step-end infinite' }}>
+                👾 🕹️ 💾 📟 🖥️ 🎮 💿 👾
+              </div>
             </div>
           </div>
         </div>
