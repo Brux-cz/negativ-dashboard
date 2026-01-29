@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Map, Mountain, Building2, Home, Layers, Sparkles, Camera, FolderOpen, ChevronRight, Settings, Download, Zap, Box, Check, X, Plus, Upload, RefreshCw, MapPin, Square, Crosshair, Lock, Unlock } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Map, Mountain, Building2, Home, Layers, Sparkles, Camera, FolderOpen, ChevronRight, Settings, Download, Zap, Box, Check, X, Plus, Upload, RefreshCw, MapPin, Square, Crosshair, Lock, Unlock, FileImage, FileText, Keyboard } from 'lucide-react';
 import { MapContainer, TileLayer, useMap, useMapEvents, Rectangle, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -108,6 +108,62 @@ const getTileBounds = (center, tileZoom, gridSize) => {
   return [[topLeft.lat, topLeft.lon], [bottomRight.lat, bottomRight.lon]];
 };
 
+// Calculate distance between two coordinates in meters (Haversine formula)
+const getDistanceMeters = (lat1, lon1, lat2, lon2) => {
+  const R = 6371000; // Earth radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+// Format distance for display
+const formatDistance = (meters) => {
+  if (meters >= 1000) {
+    return `${(meters / 1000).toFixed(2)} km`;
+  }
+  return `${Math.round(meters)} m`;
+};
+
+// Generate World File content (.jgw for JPG, .pgw for PNG)
+const generateWorldFile = (bounds, pixelWidth, pixelHeight) => {
+  const [[lat1, lon1], [lat2, lon2]] = bounds;
+  const pixelSizeX = (lon2 - lon1) / pixelWidth;
+  const pixelSizeY = (lat1 - lat2) / pixelHeight; // Negative because Y increases downward
+  const topLeftX = lon1;
+  const topLeftY = lat1;
+
+  // World file format: 6 lines
+  // Line 1: pixel size in x direction
+  // Line 2: rotation about y axis (usually 0)
+  // Line 3: rotation about x axis (usually 0)
+  // Line 4: pixel size in y direction (negative)
+  // Line 5: x coordinate of center of upper left pixel
+  // Line 6: y coordinate of center of upper left pixel
+  return `${pixelSizeX.toFixed(12)}
+0.0
+0.0
+${pixelSizeY.toFixed(12)}
+${(topLeftX + pixelSizeX / 2).toFixed(12)}
+${(topLeftY + pixelSizeY / 2).toFixed(12)}`;
+};
+
+// Estimate file size in MB
+const estimateFileSize = (width, height, format, quality) => {
+  const pixels = width * height;
+  if (format === 'png') {
+    // PNG is lossless, roughly 3-4 bytes per pixel after compression
+    return (pixels * 3.5) / (1024 * 1024);
+  } else {
+    // JPG compression ratio depends on quality
+    const compressionRatio = 0.1 + (quality / 100) * 0.4; // 0.1 at 0%, 0.5 at 100%
+    return (pixels * 3 * compressionRatio) / (1024 * 1024);
+  }
+};
+
 // Map click handler component
 const MapClickHandler = ({ onMapClick, onZoomChange }) => {
   const map = useMap();
@@ -127,6 +183,144 @@ const MapClickHandler = ({ onMapClick, onZoomChange }) => {
   }, [map, onZoomChange]);
 
   return null;
+};
+
+// Dark overlay component - darkens area outside crop bounds
+const DarkOverlay = ({ bounds }) => {
+  const map = useMap();
+  const [points, setPoints] = useState(null);
+
+  useEffect(() => {
+    if (!bounds) {
+      setPoints(null);
+      return;
+    }
+
+    const updatePoints = () => {
+      const mapBounds = map.getBounds();
+      const mapNW = map.latLngToContainerPoint(mapBounds.getNorthWest());
+      const mapSE = map.latLngToContainerPoint(mapBounds.getSouthEast());
+      const cropNW = map.latLngToContainerPoint(L.latLng(bounds[0][0], bounds[0][1]));
+      const cropSE = map.latLngToContainerPoint(L.latLng(bounds[1][0], bounds[1][1]));
+
+      setPoints({ mapNW, mapSE, cropNW, cropSE });
+    };
+
+    updatePoints();
+    map.on('move zoom', updatePoints);
+
+    return () => {
+      map.off('move zoom', updatePoints);
+    };
+  }, [map, bounds]);
+
+  if (!points) return null;
+
+  const { mapNW, mapSE, cropNW, cropSE } = points;
+
+  // Create SVG path for dark overlay with hole for crop area
+  const pathD = `
+    M ${mapNW.x - 100} ${mapNW.y - 100}
+    L ${mapSE.x + 100} ${mapNW.y - 100}
+    L ${mapSE.x + 100} ${mapSE.y + 100}
+    L ${mapNW.x - 100} ${mapSE.y + 100}
+    Z
+    M ${cropNW.x} ${cropNW.y}
+    L ${cropNW.x} ${cropSE.y}
+    L ${cropSE.x} ${cropSE.y}
+    L ${cropSE.x} ${cropNW.y}
+    Z
+  `;
+
+  return (
+    <svg
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 500,
+      }}
+    >
+      <path d={pathD} fill="rgba(0, 0, 0, 0.6)" fillRule="evenodd" />
+    </svg>
+  );
+};
+
+// Dimension labels component - shows real-world dimensions on crop edges
+const DimensionLabels = ({ bounds }) => {
+  const map = useMap();
+  const [dimensions, setDimensions] = useState(null);
+
+  useEffect(() => {
+    if (!bounds) {
+      setDimensions(null);
+      return;
+    }
+
+    const updateDimensions = () => {
+      const [[lat1, lon1], [lat2, lon2]] = bounds;
+      const width = getDistanceMeters(lat1, lon1, lat1, lon2);
+      const height = getDistanceMeters(lat1, lon1, lat2, lon1);
+
+      const cropNW = map.latLngToContainerPoint(L.latLng(lat1, lon1));
+      const cropSE = map.latLngToContainerPoint(L.latLng(lat2, lon2));
+      const centerX = (cropNW.x + cropSE.x) / 2;
+      const centerY = (cropNW.y + cropSE.y) / 2;
+
+      setDimensions({
+        width: formatDistance(width),
+        height: formatDistance(height),
+        topX: centerX,
+        topY: cropNW.y - 8,
+        leftX: cropNW.x - 8,
+        leftY: centerY,
+      });
+    };
+
+    updateDimensions();
+    map.on('move zoom', updateDimensions);
+
+    return () => {
+      map.off('move zoom', updateDimensions);
+    };
+  }, [map, bounds]);
+
+  if (!dimensions) return null;
+
+  return (
+    <>
+      {/* Top dimension (width) */}
+      <div
+        style={{
+          position: 'absolute',
+          left: dimensions.topX,
+          top: dimensions.topY,
+          transform: 'translate(-50%, -100%)',
+          zIndex: 600,
+        }}
+        className="bg-black/80 text-white text-xs font-mono px-2 py-1 rounded whitespace-nowrap"
+      >
+        {dimensions.width}
+      </div>
+      {/* Left dimension (height) */}
+      <div
+        style={{
+          position: 'absolute',
+          left: dimensions.leftX,
+          top: dimensions.leftY,
+          transform: 'translate(-100%, -50%) rotate(-90deg)',
+          transformOrigin: 'right center',
+          zIndex: 600,
+        }}
+        className="bg-black/80 text-white text-xs font-mono px-2 py-1 rounded whitespace-nowrap"
+      >
+        {dimensions.height}
+      </div>
+    </>
+  );
 };
 
 // Map view controller - moves map when center changes
@@ -181,6 +375,16 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [searching, setSearching] = useState(false);
 
+  // New state for enhanced features
+  const [imageFormat, setImageFormat] = useState(savedSettings?.imageFormat || 'png');
+  const [jpgQuality, setJpgQuality] = useState(savedSettings?.jpgQuality || 85);
+  const [generateWorldFileFlag, setGenerateWorldFileFlag] = useState(savedSettings?.generateWorldFile || false);
+  const [useCustomSize, setUseCustomSize] = useState(false);
+  const [customWidth, setCustomWidth] = useState(2048);
+  const [customHeight, setCustomHeight] = useState(2048);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const modalRef = useRef(null);
+
   const handleZoomChange = useCallback((zoom) => {
     setCurrentMapZoom(Math.round(zoom));
   }, []);
@@ -194,9 +398,57 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
       mapZoom,
       tileZoom,
       gridSize,
+      imageFormat,
+      jpgQuality,
+      generateWorldFile: generateWorldFileFlag,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize]);
+  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize, imageFormat, jpgQuality, generateWorldFileFlag]);
+
+  // Calculate actual output dimensions
+  const outputDimensions = useMemo(() => {
+    if (useCustomSize) {
+      return { width: customWidth, height: customHeight };
+    }
+    const pixels = gridSize * 256;
+    return { width: pixels, height: pixels };
+  }, [useCustomSize, customWidth, customHeight, gridSize]);
+
+  // Estimate file size
+  const estimatedSize = useMemo(() => {
+    return estimateFileSize(outputDimensions.width, outputDimensions.height, imageFormat, jpgQuality);
+  }, [outputDimensions, imageFormat, jpgQuality]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      // Don't trigger if typing in input
+      if (e.target.tagName === 'INPUT') return;
+
+      switch (e.key) {
+        case '+':
+        case '=':
+          setTileZoom(z => Math.min(21, z + 1));
+          break;
+        case '-':
+          setTileZoom(z => Math.max(17, z - 1));
+          break;
+        case 'Enter':
+          if (center && !downloading) {
+            handleDownload();
+          }
+          break;
+        case 'Escape':
+          onClose();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, center, downloading, onClose]);
 
   // Pixel sizes
   const pixelSizes = [
@@ -322,16 +574,46 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
         setDownloadProgress((loaded / totalTiles) * 100);
       }
 
+      // Generate smart filename
+      const date = new Date();
+      const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+      const latStr = center[0].toFixed(3).replace('.', '_');
+      const lonStr = center[1].toFixed(3).replace('.', '_');
+      const baseFilename = `ortho_${latStr}_${lonStr}_z${tileZoom}_${dateStr}`;
+
+      // Get bounds for world file
+      const bounds = getTileBounds(center, tileZoom, gridSize);
+
+      // Export image
+      const mimeType = imageFormat === 'jpg' ? 'image/jpeg' : 'image/png';
+      const quality = imageFormat === 'jpg' ? jpgQuality / 100 : undefined;
+
       canvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.download = `ortho-z${tileZoom}-${gridSize * 256}px-${Date.now()}.png`;
+        link.download = `${baseFilename}.${imageFormat}`;
         link.href = url;
         link.click();
         URL.revokeObjectURL(url);
+
+        // Generate World File if requested
+        if (generateWorldFileFlag && bounds) {
+          const worldFileContent = generateWorldFile(bounds, totalSize, totalSize);
+          const worldFileExt = imageFormat === 'jpg' ? 'jgw' : 'pgw';
+          const worldBlob = new Blob([worldFileContent], { type: 'text/plain' });
+          const worldUrl = URL.createObjectURL(worldBlob);
+          const worldLink = document.createElement('a');
+          worldLink.download = `${baseFilename}.${worldFileExt}`;
+          worldLink.href = worldUrl;
+          setTimeout(() => {
+            worldLink.click();
+            URL.revokeObjectURL(worldUrl);
+          }, 100);
+        }
+
         setDownloading(false);
         setDownloadProgress(0);
-      }, 'image/png');
+      }, mimeType, quality);
 
     } catch (error) {
       console.error('Download failed:', error);
@@ -345,20 +627,20 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   const cropBounds = getTileBounds(center, tileZoom, gridSize);
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-sm w-full h-full shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="p-4 border-b border-neutral-200 flex items-center justify-between shrink-0">
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose} ref={modalRef}>
+      <div className="bg-neutral-900 rounded-lg w-full h-full shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Header - Dark */}
+        <div className="px-5 py-4 border-b border-neutral-700 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-neutral-900 rounded-sm flex items-center justify-center">
+            <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
               <Map className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-medium">Ortho Map Downloader</h2>
-              <p className="text-sm text-neutral-400">Klikni na mapu pro nastavení středu</p>
+              <h2 className="text-lg font-semibold text-white">Ortho Map Downloader</h2>
+              <p className="text-sm text-neutral-400">Klikni na mapu pro nastavení středu • <span className="text-neutral-500">ESC zavřít, +/- zoom, Enter stáhnout</span></p>
             </div>
           </div>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900 p-2">
+          <button onClick={onClose} className="text-neutral-400 hover:text-white p-2 hover:bg-neutral-800 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -375,6 +657,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               <TileLayer url={selectedSource.url} maxZoom={21} />
               <MapClickHandler onMapClick={handleMapClick} onZoomChange={handleZoomChange} />
               <MapViewController center={mapView} zoom={mapZoom} />
+              <DarkOverlay bounds={cropBounds} />
 
               {center && (
                 <Marker position={center} icon={centerIcon}>
@@ -393,197 +676,318 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 <Rectangle
                   bounds={cropBounds}
                   pathOptions={{
-                    color: '#ef4444',
-                    weight: 3,
-                    fillColor: '#ef4444',
-                    fillOpacity: 0.1,
-                    dashArray: '10, 6'
+                    color: '#10b981',
+                    weight: 2,
+                    fillColor: 'transparent',
+                    fillOpacity: 0,
                   }}
                 />
               )}
             </MapContainer>
 
+            {/* Dimension labels */}
+            <DimensionLabels bounds={cropBounds} />
+
             {/* Zoom indicator */}
-            <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-2 rounded-sm shadow-sm">
-              <div className="text-sm font-mono font-bold">Zoom: {currentMapZoom}</div>
+            <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-sm px-3 py-2 rounded-lg">
+              <div className="text-sm font-mono font-bold text-white">Zoom: {currentMapZoom}</div>
             </div>
 
             {/* Center info */}
             {center && (
-              <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm px-4 py-3 rounded-sm shadow-sm">
+              <div className="absolute bottom-3 left-3 bg-black/80 backdrop-blur-sm px-4 py-3 rounded-lg">
                 <div className="text-xs text-neutral-400 mb-1">Střed výřezu</div>
-                <div className="text-sm font-mono font-medium">
+                <div className="text-sm font-mono font-medium text-white">
                   {center[0].toFixed(6)}, {center[1].toFixed(6)}
                 </div>
               </div>
             )}
+
+            {/* Scale bar placeholder */}
+            <div className="absolute bottom-3 right-3 bg-black/80 backdrop-blur-sm px-3 py-2 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className="w-16 h-1 bg-white rounded" />
+                <span className="text-xs text-white font-mono">
+                  {currentMapZoom >= 18 ? '50m' : currentMapZoom >= 15 ? '200m' : '1km'}
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="w-96 border-l border-neutral-200 p-5 overflow-y-auto shrink-0">
-            {/* Search */}
-            <div className="mb-6">
-              <label className="text-sm font-medium text-neutral-700 mb-2 block">Hledat místo nebo zadat koordináty</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                  placeholder="Adresa nebo 50.0755, 14.4378"
-                  className="flex-1 px-3 py-2 text-sm border border-neutral-200 rounded-sm focus:outline-none focus:border-neutral-400"
-                />
-                <button
-                  onClick={handleSearch}
-                  disabled={searching}
-                  className="px-3 py-2 bg-neutral-900 text-white rounded-sm hover:bg-neutral-800 disabled:bg-neutral-300"
-                >
-                  {searching ? '...' : <MapPin className="w-4 h-4" />}
-                </button>
-              </div>
-
-              {/* Search results */}
-              {searchResults.length > 0 && (
-                <div className="mt-2 border border-neutral-200 rounded-sm max-h-48 overflow-y-auto">
-                  {searchResults.map((result, i) => (
-                    <button
-                      key={i}
-                      onClick={() => selectSearchResult(result)}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
-                    >
-                      <div className="truncate">{result.name}</div>
-                      <div className="text-xs font-mono text-neutral-400">
-                        {result.lat.toFixed(5)}, {result.lon.toFixed(5)}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Map Source */}
-            <div className="mb-6">
-              <label className="text-sm font-medium text-neutral-700 mb-2 block">Zdroj mapy</label>
-              <div className="flex gap-1">
-                {orthoSources.map(source => (
-                  <button
-                    key={source.id}
-                    onClick={() => setSelectedSource(source)}
-                    className={`flex-1 py-2 rounded-sm border text-sm font-medium transition-all ${
-                      selectedSource.id === source.id
-                        ? 'border-neutral-900 bg-neutral-900 text-white'
-                        : 'border-neutral-200 hover:border-neutral-400'
-                    }`}
-                  >
-                    {source.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Tile Zoom */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-neutral-700">Zoom pro stažení</label>
-                <button
-                  onClick={() => setTileZoom(Math.min(21, Math.max(17, currentMapZoom)))}
-                  className="text-xs text-blue-600 hover:text-blue-800"
-                >
-                  Použít aktuální ({currentMapZoom})
-                </button>
-              </div>
-              <div className="flex gap-1">
-                {tileZooms.map(z => (
-                  <button
-                    key={z.value}
-                    onClick={() => setTileZoom(z.value)}
-                    className={`flex-1 py-2 rounded-sm border text-sm font-medium transition-all ${
-                      tileZoom === z.value
-                        ? 'border-neutral-900 bg-neutral-900 text-white'
-                        : 'border-neutral-200 hover:border-neutral-400'
-                    }`}
-                  >
-                    {z.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Pixel size */}
-            <div className="mb-6">
-              <label className="text-sm font-medium text-neutral-700 mb-2 block">Velikost výřezu</label>
-              <div className="grid grid-cols-3 gap-2">
-                {pixelSizes.map(p => (
-                  <button
-                    key={p.value}
-                    onClick={() => setGridSize(p.value)}
-                    className={`py-2 rounded-sm border text-sm font-medium transition-all ${
-                      gridSize === p.value
-                        ? 'border-neutral-900 bg-neutral-900 text-white'
-                        : 'border-neutral-200 hover:border-neutral-400'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Advanced info - collapsible */}
-            <div className="mb-6">
+          {/* Sidebar - Dark Mode */}
+          <div className={`${sidebarCollapsed ? 'w-12' : 'w-96'} bg-neutral-800 border-l border-neutral-700 overflow-y-auto shrink-0 transition-all duration-300`}>
+            {sidebarCollapsed ? (
               <button
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700"
+                onClick={() => setSidebarCollapsed(false)}
+                className="w-full h-full flex items-center justify-center text-neutral-400 hover:text-white"
               >
-                <ChevronRight className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
-                Podrobnosti
+                <ChevronRight className="w-5 h-5" />
               </button>
-              {showAdvanced && (
-                <div className="mt-3 p-3 bg-neutral-50 rounded-sm text-sm space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Rozlišení:</span>
-                    <span className="font-mono">{gridSize * 256} × {gridSize * 256} px</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Tiles:</span>
-                    <span className="font-mono">{gridSize * gridSize}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Zdroj:</span>
-                    <span>Google Satellite</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Download button */}
-            <div className="pt-4 border-t border-neutral-200">
-              {downloading ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span>Stahuji tiles...</span>
-                    <span className="font-mono">{Math.round(downloadProgress)}%</span>
-                  </div>
-                  <div className="w-full bg-neutral-200 rounded-full h-2">
-                    <div className="bg-neutral-900 h-2 rounded-full transition-all" style={{ width: `${downloadProgress}%` }} />
-                  </div>
-                </div>
-              ) : (
+            ) : (
+              <div className="p-5 space-y-6">
+                {/* Collapse button */}
                 <button
-                  onClick={handleDownload}
-                  disabled={!center}
-                  className="w-full py-3 bg-neutral-900 text-white text-sm font-medium rounded-sm hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 flex items-center justify-center gap-2"
+                  onClick={() => setSidebarCollapsed(true)}
+                  className="absolute top-20 right-[370px] p-1 bg-neutral-700 rounded-l-lg text-neutral-400 hover:text-white z-10"
                 >
-                  <Download className="w-5 h-5" />
-                  Stáhnout PNG
+                  <ChevronRight className="w-4 h-4 rotate-180" />
                 </button>
-              )}
-              {!center && (
-                <p className="text-sm text-neutral-400 text-center mt-3">
-                  Klikni na mapu pro výběr středu
-                </p>
-              )}
-            </div>
+
+                {/* Search */}
+                <div>
+                  <label className="text-sm font-medium text-neutral-300 mb-2 block">Hledat místo</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                      placeholder="Adresa nebo 50.0755, 14.4378"
+                      className="flex-1 px-3 py-2.5 text-sm bg-neutral-700 border border-neutral-600 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    />
+                    <button
+                      onClick={handleSearch}
+                      disabled={searching}
+                      className="px-3 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:bg-neutral-600 transition-colors"
+                    >
+                      {searching ? '...' : <MapPin className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  {/* Search results */}
+                  {searchResults.length > 0 && (
+                    <div className="mt-2 bg-neutral-700 border border-neutral-600 rounded-lg max-h-48 overflow-y-auto">
+                      {searchResults.map((result, i) => (
+                        <button
+                          key={i}
+                          onClick={() => selectSearchResult(result)}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-neutral-600 border-b border-neutral-600 last:border-0 transition-colors"
+                        >
+                          <div className="truncate text-white">{result.name}</div>
+                          <div className="text-xs font-mono text-neutral-400">
+                            {result.lat.toFixed(5)}, {result.lon.toFixed(5)}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Map Source */}
+                <div>
+                  <label className="text-sm font-medium text-neutral-300 mb-2 block">Zdroj mapy</label>
+                  <div className="flex gap-2">
+                    {orthoSources.map(source => (
+                      <button
+                        key={source.id}
+                        onClick={() => setSelectedSource(source)}
+                        className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                          selectedSource.id === source.id
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
+                        }`}
+                      >
+                        {source.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tile Zoom - Slider */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-neutral-300">Zoom pro stažení</label>
+                    <span className="text-sm font-mono text-emerald-400">{tileZoom}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={17}
+                    max={21}
+                    value={tileZoom}
+                    onChange={e => setTileZoom(parseInt(e.target.value))}
+                    className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                  />
+                  <div className="flex justify-between text-xs text-neutral-500 mt-1">
+                    <span>17</span>
+                    <span>18</span>
+                    <span>19</span>
+                    <span>20</span>
+                    <span>21</span>
+                  </div>
+                  <button
+                    onClick={() => setTileZoom(Math.min(21, Math.max(17, currentMapZoom)))}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 mt-2"
+                  >
+                    Použít aktuální zoom mapy ({currentMapZoom})
+                  </button>
+                </div>
+
+                {/* Pixel size - Presets + Custom */}
+                <div>
+                  <label className="text-sm font-medium text-neutral-300 mb-2 block">Velikost výřezu</label>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {pixelSizes.slice(0, 6).map(p => (
+                      <button
+                        key={p.value}
+                        onClick={() => { setGridSize(p.value); setUseCustomSize(false); }}
+                        className={`py-2 rounded-lg text-sm font-medium transition-all ${
+                          gridSize === p.value && !useCustomSize
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom size toggle */}
+                  <button
+                    onClick={() => setUseCustomSize(!useCustomSize)}
+                    className={`w-full py-2 rounded-lg text-sm font-medium transition-all mb-2 ${
+                      useCustomSize
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
+                    }`}
+                  >
+                    Vlastní velikost
+                  </button>
+
+                  {useCustomSize && (
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-xs text-neutral-500 mb-1 block">Šířka (px)</label>
+                        <input
+                          type="number"
+                          value={customWidth}
+                          onChange={e => setCustomWidth(parseInt(e.target.value) || 256)}
+                          className="w-full px-3 py-2 text-sm bg-neutral-700 border border-neutral-600 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs text-neutral-500 mb-1 block">Výška (px)</label>
+                        <input
+                          type="number"
+                          value={customHeight}
+                          onChange={e => setCustomHeight(parseInt(e.target.value) || 256)}
+                          className="w-full px-3 py-2 text-sm bg-neutral-700 border border-neutral-600 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Format selection */}
+                <div>
+                  <label className="text-sm font-medium text-neutral-300 mb-2 block">Formát</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setImageFormat('png')}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                        imageFormat === 'png'
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
+                      }`}
+                    >
+                      <FileImage className="w-4 h-4" />
+                      PNG
+                    </button>
+                    <button
+                      onClick={() => setImageFormat('jpg')}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                        imageFormat === 'jpg'
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
+                      }`}
+                    >
+                      <FileImage className="w-4 h-4" />
+                      JPG
+                    </button>
+                  </div>
+
+                  {imageFormat === 'jpg' && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs text-neutral-500">Kvalita</label>
+                        <span className="text-xs font-mono text-emerald-400">{jpgQuality}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={10}
+                        max={100}
+                        value={jpgQuality}
+                        onChange={e => setJpgQuality(parseInt(e.target.value))}
+                        className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* World File option */}
+                <div>
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={generateWorldFileFlag}
+                      onChange={e => setGenerateWorldFileFlag(e.target.checked)}
+                      className="w-4 h-4 rounded bg-neutral-700 border-neutral-600 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-neutral-800"
+                    />
+                    <div>
+                      <span className="text-sm text-neutral-300 group-hover:text-white transition-colors">Generovat World File</span>
+                      <p className="text-xs text-neutral-500">.{imageFormat === 'jpg' ? 'jgw' : 'pgw'} pro GIS/CAD georeferenci</p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Info section */}
+                <div className="bg-neutral-700/50 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-400">Rozlišení:</span>
+                    <span className="font-mono text-white">{outputDimensions.width} × {outputDimensions.height} px</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-400">Tiles:</span>
+                    <span className="font-mono text-white">{gridSize * gridSize}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-neutral-400">Odhad velikosti:</span>
+                    <span className="font-mono text-emerald-400">~{estimatedSize.toFixed(1)} MB</span>
+                  </div>
+                </div>
+
+                {/* Download button */}
+                <div className="pt-4 border-t border-neutral-700">
+                  {downloading ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-neutral-300 flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                          Generuji...
+                        </span>
+                        <span className="font-mono text-emerald-400">{Math.round(downloadProgress)}%</span>
+                      </div>
+                      <div className="w-full bg-neutral-700 rounded-full h-2">
+                        <div className="bg-emerald-500 h-2 rounded-full transition-all" style={{ width: `${downloadProgress}%` }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleDownload}
+                      disabled={!center}
+                      className="w-full py-3.5 bg-emerald-500 text-white text-sm font-semibold rounded-lg hover:bg-emerald-600 disabled:bg-neutral-700 disabled:text-neutral-500 flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <Download className="w-5 h-5" />
+                      Stáhnout {imageFormat.toUpperCase()}
+                    </button>
+                  )}
+                  {!center && (
+                    <p className="text-sm text-neutral-500 text-center mt-3">
+                      Klikni na mapu pro výběr středu
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
