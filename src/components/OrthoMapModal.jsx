@@ -344,9 +344,9 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
     }
   }, [isOpen, shiftHeld]);
 
-  // Easter egg controlled by GitHub variable EASTER_EGG_ENABLED (Settings > Variables)
-  const EASTER_EGG_ENABLED = import.meta.env.VITE_EASTER_EGG_ENABLED === 'true';
-  const isEasterEggDismissed = !EASTER_EGG_ENABLED || searchQuery.toLowerCase().includes('hodkovice') || secretBypass;
+  // Easter egg can be disabled via GitHub variable EASTER_EGG_ENABLED=false (Settings > Variables)
+  const easterEggEnabled = import.meta.env.VITE_EASTER_EGG_ENABLED !== 'false';
+  const isEasterEggDismissed = !easterEggEnabled || searchQuery.toLowerCase().includes('hodkovice') || secretBypass;
 
   // Questions about Petr
   const petrQuestions = useMemo(() => [
