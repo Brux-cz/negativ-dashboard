@@ -345,7 +345,8 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
 
   const [selectedSource, setSelectedSource] = useState(getValidSource);
   const [center, setCenter] = useState(savedSettings?.center || null);
-  const [mapView, setMapView] = useState(savedSettings?.mapView || [50.0755, 14.4378]);
+  // If center exists, use it as initial mapView so the viewport shows the selected point
+  const [mapView, setMapView] = useState(savedSettings?.center || savedSettings?.mapView || [50.0755, 14.4378]);
   const [mapZoom, setMapZoom] = useState(savedSettings?.mapZoom || 14);
   const [tileZoom, setTileZoom] = useState(savedSettings?.tileZoom || 18);
   const [gridSize, setGridSize] = useState(savedSettings?.gridSize || 7);
