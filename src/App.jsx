@@ -810,78 +810,62 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose} ref={modalRef}>
-      {/* Mysterious Eye Quiz Easter Egg */}
+      {/* Windows 98 Easter Egg */}
       {!isEasterEggDismissed && (
         <div
           className="fixed inset-0 z-[9999] overflow-hidden flex items-center justify-center"
           style={{
-            background: 'radial-gradient(ellipse at center, #1a0a2e 0%, #0d0015 50%, #000 100%)',
+            background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff0000, #00ff00, #0000ff)',
+            backgroundSize: '400% 400%',
+            animation: 'rainbow 15s ease infinite',
           }}
         >
           <style>{`
-            @keyframes eyePulse {
-              0%, 100% { transform: scale(1); filter: drop-shadow(0 0 30px #9333ea); }
-              50% { transform: scale(1.05); filter: drop-shadow(0 0 60px #c084fc); }
+            @keyframes rainbow {
+              0% { background-position: 0% 50%; }
+              50% { background-position: 100% 50%; }
+              100% { background-position: 0% 50%; }
             }
-            @keyframes irisGlow {
-              0%, 100% { fill: #7c3aed; }
-              33% { fill: #06b6d4; }
-              66% { fill: #f59e0b; }
+            @keyframes floatSmooth {
+              0% { transform: translateY(0) rotate(var(--rot)); }
+              25% { transform: translateY(-15px) rotate(calc(var(--rot) + 3deg)); }
+              50% { transform: translateY(-25px) rotate(calc(var(--rot) + 5deg)); }
+              75% { transform: translateY(-10px) rotate(calc(var(--rot) + 2deg)); }
+              100% { transform: translateY(0) rotate(var(--rot)); }
             }
-            @keyframes numberSpin {
-              0% { transform: rotateX(0deg); }
-              100% { transform: rotateX(360deg); }
+            @keyframes colorCycle {
+              0% { color: #ff00ff; text-shadow: 0 0 10px #ff00ff; }
+              20% { color: #00ffff; text-shadow: 0 0 10px #00ffff; }
+              40% { color: #ffff00; text-shadow: 0 0 10px #ffff00; }
+              60% { color: #00ff00; text-shadow: 0 0 10px #00ff00; }
+              80% { color: #ff0000; text-shadow: 0 0 10px #ff0000; }
+              100% { color: #ff00ff; text-shadow: 0 0 10px #ff00ff; }
             }
-            @keyframes mysticalFloat {
-              0%, 100% { transform: translateY(0) rotate(-3deg); }
-              50% { transform: translateY(-10px) rotate(3deg); }
-            }
-            @keyframes starTwinkle {
-              0%, 100% { opacity: 0.3; }
-              50% { opacity: 1; }
+            @keyframes pulse {
+              0%, 100% { transform: scale(1); filter: brightness(1); }
+              50% { transform: scale(1.08); filter: brightness(1.2); }
             }
             @keyframes successPulse {
-              0%, 100% { transform: scale(1); }
-              50% { transform: scale(1.2); }
+              0%, 100% { transform: scale(1); filter: drop-shadow(0 0 20px #22c55e); }
+              50% { transform: scale(1.15); filter: drop-shadow(0 0 40px #22c55e); }
             }
           `}</style>
 
-          {/* Mystical stars background */}
-          {[...Array(50)].map((_, i) => (
-            <div
-              key={i}
-              style={{
-                position: 'absolute',
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                width: `${2 + Math.random() * 4}px`,
-                height: `${2 + Math.random() * 4}px`,
-                background: ['#fff', '#c084fc', '#06b6d4', '#f59e0b'][i % 4],
-                borderRadius: '50%',
-                animation: `starTwinkle ${2 + Math.random() * 3}s ease-in-out infinite`,
-                animationDelay: `${Math.random() * 2}s`,
-                pointerEvents: 'none',
-              }}
-            />
-          ))}
-
-          {/* PETR SVETR floating around */}
-          {[...Array(12)].map((_, i) => (
+          {/* PETR SVETR floating everywhere */}
+          {[...Array(20)].map((_, i) => (
             <div
               key={`petr-${i}`}
               style={{
                 position: 'absolute',
-                left: `${(i * 25) % 90 + 5}%`,
-                top: `${(i * 31) % 85 + 5}%`,
+                left: `${(i * 19) % 90 + 5}%`,
+                top: `${(i * 23) % 85 + 5}%`,
                 fontFamily: '"Comic Sans MS", cursive',
-                fontSize: `${14 + (i % 3) * 8}px`,
+                fontSize: `${16 + (i % 4) * 10}px`,
                 fontWeight: 'bold',
-                color: ['#c084fc', '#06b6d4', '#f59e0b', '#ec4899'][i % 4],
-                textShadow: '2px 2px 4px #000',
-                animation: `mysticalFloat ${5 + (i % 4)}s ease-in-out infinite`,
-                animationDelay: `${i * 0.5}s`,
-                transform: `rotate(${(i * 30) % 360 - 180}deg)`,
-                opacity: 0.7,
+                textShadow: '3px 3px 6px rgba(0,0,0,0.5)',
+                animation: `floatSmooth ${8 + (i % 5) * 2}s ease-in-out infinite, colorCycle ${10 + (i % 4) * 3}s ease infinite`,
+                animationDelay: `${i * 0.4}s`,
+                '--rot': `${(i * 25) % 360 - 180}deg`,
                 pointerEvents: 'none',
               }}
             >
@@ -905,10 +889,11 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                   VÍTĚZ!
                 </div>
                 <div style={{
-                  fontFamily: 'monospace',
+                  fontFamily: '"Comic Sans MS", cursive',
                   fontSize: '18px',
-                  color: '#a855f7',
+                  color: '#00ffff',
                   marginTop: '10px',
+                  textShadow: '1px 1px 2px #000',
                 }}>
                   Jsi hoden vstupu... 👁️
                 </div>
@@ -918,18 +903,21 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 {!currentGame ? (
                   <>
                     {/* Magic card selection */}
-                    <div style={{ fontSize: '80px', marginBottom: '20px' }}>🃏</div>
+                    <div style={{ fontSize: '80px', marginBottom: '20px', animation: 'pulse 3s ease-in-out infinite' }}>🃏</div>
                     <div style={{
                       fontFamily: '"Comic Sans MS", cursive',
                       fontSize: '32px',
-                      color: '#f59e0b',
-                      textShadow: '0 0 20px #f59e0b',
+                      background: 'linear-gradient(90deg, #ff00ff, #00ffff, #ffff00)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      backgroundClip: 'text',
                       marginBottom: '30px',
+                      filter: 'drop-shadow(3px 3px 0px #000)',
                     }}>
                       ✨ VYBER SI MINI HRU ✨
                     </div>
                     <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                      {miniGames.map(game => (
+                      {miniGames.map((game, i) => (
                         <button
                           key={game.id}
                           onClick={() => startGame(game.id)}
@@ -937,19 +925,22 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                             padding: '20px 30px',
                             fontSize: '18px',
                             fontFamily: '"Comic Sans MS", cursive',
-                            background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
-                            border: '3px solid #6366f1',
+                            background: i === 0 ? 'linear-gradient(135deg, #ff00ff, #ff66ff)'
+                              : i === 1 ? 'linear-gradient(135deg, #00ffff, #66ffff)'
+                              : 'linear-gradient(135deg, #ffff00, #ffff66)',
+                            border: '4px solid #fff',
                             borderRadius: '12px',
-                            color: '#fff',
+                            color: i === 2 ? '#000' : '#fff',
                             cursor: 'pointer',
                             minWidth: '200px',
-                            transition: 'all 0.3s',
+                            transition: 'all 0.5s ease',
+                            boxShadow: '4px 4px 0px #000',
                           }}
                           onMouseOver={e => e.target.style.transform = 'scale(1.05)'}
                           onMouseOut={e => e.target.style.transform = 'scale(1)'}
                         >
                           <div style={{ fontSize: '24px', marginBottom: '10px' }}>{game.name}</div>
-                          <div style={{ fontSize: '14px', color: '#a5b4fc' }}>{game.desc}</div>
+                          <div style={{ fontSize: '14px', opacity: 0.8 }}>{game.desc}</div>
                         </button>
                       ))}
                     </div>
@@ -961,16 +952,18 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                     <div style={{
                       fontFamily: '"Comic Sans MS", cursive',
                       fontSize: '28px',
-                      color: '#ec4899',
+                      color: '#ff00ff',
                       marginBottom: '20px',
+                      textShadow: '2px 2px 4px #000',
                     }}>
                       Klikni 20x! Zbývá: {gameTimeLeft}s
                     </div>
                     <div style={{
                       fontSize: '72px',
-                      fontFamily: 'monospace',
-                      color: clickCount >= 20 ? '#22c55e' : '#fff',
+                      fontFamily: '"Comic Sans MS", cursive',
+                      color: clickCount >= 20 ? '#00ff00' : '#fff',
                       marginBottom: '20px',
+                      textShadow: '3px 3px 6px #000',
                     }}>
                       {clickCount} / 20
                     </div>
@@ -981,11 +974,13 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                         padding: '40px 80px',
                         fontSize: '24px',
                         fontFamily: '"Comic Sans MS", cursive',
-                        background: gameTimeLeft > 0 ? 'linear-gradient(135deg, #ec4899, #f472b6)' : '#666',
-                        border: 'none',
+                        background: gameTimeLeft > 0 ? 'linear-gradient(135deg, #ff00ff, #00ffff)' : '#666',
+                        border: '4px solid #fff',
                         borderRadius: '20px',
                         color: '#fff',
                         cursor: gameTimeLeft > 0 ? 'pointer' : 'not-allowed',
+                        boxShadow: gameTimeLeft > 0 ? '6px 6px 0px #000' : 'none',
+                        transition: 'all 0.2s ease',
                       }}
                     >
                       {gameTimeLeft > 0 ? '👆 KLIKEJ! 👆' : (clickCount >= 20 ? '✅ HOTOVO!' : '❌ KONEC')}
@@ -998,13 +993,14 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                     <div style={{
                       fontFamily: '"Comic Sans MS", cursive',
                       fontSize: '24px',
-                      color: '#06b6d4',
+                      color: '#00ffff',
                       marginBottom: '20px',
+                      textShadow: '2px 2px 4px #000',
                     }}>
                       {memoryShowIndex < memorySequence.length ? 'Zapamatuj si!' : 'Opakuj sekvenci!'}
                     </div>
                     <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginBottom: '20px' }}>
-                      {['#ef4444', '#22c55e', '#3b82f6', '#f59e0b'].map((color, i) => (
+                      {['#ff0000', '#00ff00', '#0000ff', '#ffff00'].map((color, i) => (
                         <button
                           key={i}
                           onClick={() => handleMemoryClick(i)}
@@ -1013,21 +1009,24 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                             width: '80px',
                             height: '80px',
                             borderRadius: '12px',
-                            border: 'none',
+                            border: '4px solid #fff',
                             background: color,
                             opacity: memoryShowIndex < memorySequence.length
                               ? (memorySequence[memoryShowIndex] === i ? 1 : 0.3)
                               : 0.8,
                             cursor: memoryShowIndex >= memorySequence.length ? 'pointer' : 'default',
                             transform: memoryShowIndex < memorySequence.length && memorySequence[memoryShowIndex] === i
-                              ? 'scale(1.2)'
+                              ? 'scale(1.3)'
                               : 'scale(1)',
-                            transition: 'all 0.3s',
+                            transition: 'all 0.5s ease',
+                            boxShadow: memoryShowIndex < memorySequence.length && memorySequence[memoryShowIndex] === i
+                              ? `0 0 30px ${color}`
+                              : '3px 3px 0px #000',
                           }}
                         />
                       ))}
                     </div>
-                    <div style={{ fontSize: '14px', color: '#64748b' }}>
+                    <div style={{ fontSize: '16px', color: '#ffff00', fontFamily: '"Comic Sans MS", cursive', textShadow: '1px 1px 2px #000' }}>
                       Krok: {playerSequence.length} / {memorySequence.length}
                     </div>
                   </>
@@ -1038,8 +1037,9 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                     <div style={{
                       fontFamily: '"Comic Sans MS", cursive',
                       fontSize: '24px',
-                      color: '#a855f7',
+                      color: '#ffff00',
                       marginBottom: '10px',
+                      textShadow: '2px 2px 4px #000',
                     }}>
                       Čas: {gameTimeLeft}s | Skóre: {mathScore}/5
                     </div>
@@ -1047,9 +1047,10 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       <>
                         <div style={{
                           fontSize: '48px',
-                          fontFamily: 'monospace',
+                          fontFamily: '"Comic Sans MS", cursive',
                           color: '#fff',
                           marginBottom: '20px',
+                          textShadow: '3px 3px 6px #000',
                         }}>
                           {mathProblem.a} {mathProblem.op} {mathProblem.b} = ?
                         </div>
@@ -1062,14 +1063,15 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                           style={{
                             padding: '15px 30px',
                             fontSize: '28px',
-                            fontFamily: 'monospace',
-                            border: '3px solid #a855f7',
+                            fontFamily: '"Comic Sans MS", cursive',
+                            border: '4px solid #ffff00',
                             borderRadius: '8px',
                             background: 'rgba(0,0,0,0.8)',
-                            color: '#a855f7',
+                            color: '#ffff00',
                             textAlign: 'center',
                             outline: 'none',
                             width: '150px',
+                            boxShadow: '0 0 20px #ffff00',
                           }}
                         />
                         <div style={{ marginTop: '15px' }}>
@@ -1079,11 +1081,13 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                               padding: '12px 40px',
                               fontSize: '18px',
                               fontFamily: '"Comic Sans MS", cursive',
-                              background: 'linear-gradient(135deg, #9333ea, #c084fc)',
-                              border: 'none',
+                              background: 'linear-gradient(135deg, #ffff00, #00ff00)',
+                              border: '4px solid #fff',
                               borderRadius: '8px',
-                              color: '#fff',
+                              color: '#000',
                               cursor: 'pointer',
+                              boxShadow: '4px 4px 0px #000',
+                              transition: 'all 0.3s ease',
                             }}
                           >
                             Odpovědět
@@ -1092,7 +1096,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       </>
                     )}
                     {gameTimeLeft === 0 && mathScore < 5 && (
-                      <div style={{ color: '#ef4444', fontSize: '24px' }}>❌ Čas vypršel!</div>
+                      <div style={{ color: '#ff0000', fontSize: '24px', textShadow: '2px 2px 4px #000' }}>❌ Čas vypršel!</div>
                     )}
                   </>
                 ) : null}
@@ -1110,10 +1114,11 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                   SPRÁVNĚ!
                 </div>
                 <div style={{
-                  fontFamily: 'monospace',
+                  fontFamily: '"Comic Sans MS", cursive',
                   fontSize: '18px',
-                  color: '#a855f7',
+                  color: '#00ffff',
                   marginTop: '10px',
+                  textShadow: '1px 1px 2px #000',
                 }}>
                   Připrav se na mini hru... 🎮
                 </div>
@@ -1121,29 +1126,37 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
             ) : (
               <>
                 {/* The Mysterious Eye */}
-                <div style={{ animation: 'eyePulse 3s ease-in-out infinite', marginBottom: '30px' }}>
-                  <svg width="200" height="120" viewBox="0 0 200 120">
+                <div style={{ animation: 'pulse 4s ease-in-out infinite', marginBottom: '30px' }}>
+                  <svg width="220" height="130" viewBox="0 0 220 130">
+                    {/* Eye glow */}
+                    <ellipse cx="110" cy="65" rx="95" ry="55" fill="rgba(255,0,255,0.3)" />
                     {/* Eye outline */}
-                    <ellipse cx="100" cy="60" rx="90" ry="50" fill="none" stroke="#9333ea" strokeWidth="4" />
-                    {/* Iris */}
-                    <circle cx="100" cy="60" r="35" style={{ animation: 'irisGlow 4s ease infinite' }} />
+                    <ellipse cx="110" cy="65" rx="90" ry="50" fill="none" stroke="#fff" strokeWidth="4" />
+                    {/* Iris rainbow */}
+                    <circle cx="110" cy="65" r="38" fill="url(#irisGradient)" />
+                    <defs>
+                      <linearGradient id="irisGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#ff00ff" />
+                        <stop offset="50%" stopColor="#00ffff" />
+                        <stop offset="100%" stopColor="#ffff00" />
+                      </linearGradient>
+                    </defs>
                     {/* Pupil with number */}
-                    <circle cx="100" cy="60" r="18" fill="#000" />
+                    <circle cx="110" cy="65" r="20" fill="#000" />
                     {/* Number in pupil */}
                     <text
-                      x="100"
-                      y="68"
+                      x="110"
+                      y="73"
                       textAnchor="middle"
-                      fill="#fff"
-                      fontSize="24"
+                      fill="#0f0"
+                      fontSize="26"
                       fontFamily="monospace"
                       fontWeight="bold"
-                      style={isDrawing ? { animation: 'numberSpin 0.1s linear infinite' } : {}}
                     >
                       {isDrawing ? drawingNumber : quizQuestion?.id || '?'}
                     </text>
                     {/* Eye shine */}
-                    <circle cx="115" cy="50" r="8" fill="rgba(255,255,255,0.6)" />
+                    <circle cx="125" cy="52" r="10" fill="rgba(255,255,255,0.7)" />
                   </svg>
                 </div>
 
@@ -1151,9 +1164,13 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 <div style={{
                   fontFamily: '"Comic Sans MS", cursive',
                   fontSize: '36px',
-                  color: '#c084fc',
-                  textShadow: '0 0 20px #9333ea',
+                  background: 'linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #00ff00)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  textShadow: 'none',
                   marginBottom: '20px',
+                  filter: 'drop-shadow(3px 3px 0px #000)',
                 }}>
                   {isDrawing ? '🔮 Losuji otázku... 🔮' : '👁️ OKO POZNÁNÍ 👁️'}
                 </div>
@@ -1162,10 +1179,11 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 {!isDrawing && quizQuestion && (
                   <>
                     <div style={{
-                      fontFamily: 'monospace',
+                      fontFamily: '"Comic Sans MS", cursive',
                       fontSize: '14px',
-                      color: '#64748b',
+                      color: '#ffff00',
                       marginBottom: '10px',
+                      textShadow: '1px 1px 2px #000',
                     }}>
                       Otázka č. {quizQuestion.id} z 10
                     </div>
@@ -1173,7 +1191,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       fontFamily: '"Comic Sans MS", cursive',
                       fontSize: '24px',
                       color: '#fff',
-                      textShadow: '0 0 10px #c084fc',
+                      textShadow: '2px 2px 4px #000, 0 0 20px #ff00ff',
                       marginBottom: '10px',
                       maxWidth: '500px',
                       padding: '0 20px',
@@ -1191,14 +1209,15 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                         marginTop: '20px',
                         padding: '15px 30px',
                         fontSize: '20px',
-                        fontFamily: 'monospace',
-                        border: '3px solid #9333ea',
+                        fontFamily: '"Comic Sans MS", cursive',
+                        border: '4px solid #00ffff',
                         borderRadius: '8px',
                         background: 'rgba(0,0,0,0.8)',
-                        color: '#c084fc',
+                        color: '#00ffff',
                         textAlign: 'center',
                         outline: 'none',
                         width: '300px',
+                        boxShadow: '0 0 20px #00ffff',
                       }}
                     />
                     <div style={{ marginTop: '15px' }}>
@@ -1208,22 +1227,25 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                           padding: '12px 40px',
                           fontSize: '18px',
                           fontFamily: '"Comic Sans MS", cursive',
-                          background: 'linear-gradient(135deg, #9333ea, #c084fc)',
-                          border: 'none',
+                          background: 'linear-gradient(135deg, #ff00ff, #00ffff)',
+                          border: '4px solid #fff',
                           borderRadius: '8px',
                           color: '#fff',
                           cursor: 'pointer',
-                          textShadow: '1px 1px 2px #000',
+                          textShadow: '2px 2px 4px #000',
+                          boxShadow: '4px 4px 0px #000',
+                          transition: 'all 0.3s ease',
                         }}
                       >
                         ✨ Odpovědět ✨
                       </button>
                     </div>
                     <div style={{
-                      fontFamily: 'monospace',
-                      fontSize: '12px',
-                      color: '#64748b',
+                      fontFamily: '"Comic Sans MS", cursive',
+                      fontSize: '14px',
+                      color: '#ffff00',
                       marginTop: '30px',
+                      textShadow: '1px 1px 2px #000',
                     }}>
                       Odpověz správně a odhalíš tajemství... 🌟
                     </div>
