@@ -628,66 +628,260 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     }
   };
 
+  // Easter egg quiz state
+  const [quizQuestion, setQuizQuestion] = useState(null);
+  const [isDrawing, setIsDrawing] = useState(true);
+  const [drawingNumber, setDrawingNumber] = useState(1);
+  const [quizAnswer, setQuizAnswer] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  // Mini-game state
+  const [showMiniGame, setShowMiniGame] = useState(false);
+  const [currentGame, setCurrentGame] = useState(null);
+  const [gameScore, setGameScore] = useState(0);
+  const [gameTimeLeft, setGameTimeLeft] = useState(0);
+  const [clickCount, setClickCount] = useState(0);
+  const [memorySequence, setMemorySequence] = useState([]);
+  const [playerSequence, setPlayerSequence] = useState([]);
+  const [memoryShowIndex, setMemoryShowIndex] = useState(-1);
+  const [mathProblem, setMathProblem] = useState(null);
+  const [mathAnswer, setMathAnswer] = useState('');
+  const [mathScore, setMathScore] = useState(0);
+  const [gameWon, setGameWon] = useState(false);
+
+  const isEasterEggDismissed = searchQuery.toLowerCase().includes('hodkovice');
+
+  // Questions about Petr
+  const petrQuestions = useMemo(() => [
+    { id: 1, question: "Jak se jmenuje Petrův pes?", answer: "ringo", hint: "🐕" },
+    { id: 2, question: "Jaké bylo první zvíře které Petr měl?", answer: "křeček", hint: "🐹" },
+    { id: 3, question: "Který den v měsíci má Petr narozeniny?", answer: "15", hint: "📅" },
+    { id: 4, question: "Jak se jmenuje Petrova babička?", answer: "marie", hint: "👵" },
+    { id: 5, question: "Jaký je Petrův oblíbený seriál?", answer: "simpsons", hint: "📺" },
+    { id: 6, question: "Máte Petra rádi?", answer: "ano", hint: "❤️" },
+    { id: 7, question: "Ve kterém městě Petr bydlí?", answer: "hodkovice", hint: "🏠" },
+    { id: 8, question: "Jaká je Petrova oblíbená barva?", answer: "modrá", hint: "🎨" },
+    { id: 9, question: "Kolik má Petr sourozenců?", answer: "1", hint: "👫" },
+    { id: 10, question: "Jaké je Petrovo oblíbené jídlo?", answer: "pizza", hint: "🍕" },
+  ], []);
+
+  // Drawing animation effect
+  useEffect(() => {
+    if (!isOpen || isEasterEggDismissed) return;
+
+    if (isDrawing) {
+      const interval = setInterval(() => {
+        setDrawingNumber(Math.floor(Math.random() * 10) + 1);
+      }, 100);
+
+      const timeout = setTimeout(() => {
+        clearInterval(interval);
+        const randomQ = petrQuestions[Math.floor(Math.random() * petrQuestions.length)];
+        setQuizQuestion(randomQ);
+        setIsDrawing(false);
+      }, 3000);
+
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      };
+    }
+  }, [isOpen, isDrawing, isEasterEggDismissed, petrQuestions]);
+
+  // Check answer
+  const checkAnswer = () => {
+    if (quizQuestion && quizAnswer.toLowerCase().trim() === quizQuestion.answer) {
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        setShowMiniGame(true);
+      }, 2000);
+    }
+  };
+
+  // Mini-games
+  const miniGames = [
+    { id: 'click', name: '🖱️ KLIKACÍ ŠÍLENSTVÍ', desc: 'Klikni 20x za 5 sekund!' },
+    { id: 'memory', name: '🧠 PAMĚŤOVÁ VÝZVA', desc: 'Zapamatuj si sekvenci!' },
+    { id: 'math', name: '🔢 MATEMATICKÝ BOSS', desc: 'Vyřeš 5 příkladů za 30s!' },
+  ];
+
+  const startGame = (gameId) => {
+    setCurrentGame(gameId);
+    setGameWon(false);
+
+    if (gameId === 'click') {
+      setClickCount(0);
+      setGameTimeLeft(5);
+    } else if (gameId === 'memory') {
+      const seq = Array.from({ length: 5 }, () => Math.floor(Math.random() * 4));
+      setMemorySequence(seq);
+      setPlayerSequence([]);
+      setMemoryShowIndex(0);
+    } else if (gameId === 'math') {
+      setMathScore(0);
+      setGameTimeLeft(30);
+      generateMathProblem();
+    }
+  };
+
+  const generateMathProblem = () => {
+    const ops = ['+', '-', '*'];
+    const op = ops[Math.floor(Math.random() * ops.length)];
+    let a, b;
+    if (op === '*') {
+      a = Math.floor(Math.random() * 10) + 1;
+      b = Math.floor(Math.random() * 10) + 1;
+    } else {
+      a = Math.floor(Math.random() * 50) + 10;
+      b = Math.floor(Math.random() * 30) + 1;
+    }
+    const answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
+    setMathProblem({ a, b, op, answer });
+    setMathAnswer('');
+  };
+
+  // Click game timer
+  useEffect(() => {
+    if (currentGame === 'click' && gameTimeLeft > 0) {
+      const timer = setTimeout(() => setGameTimeLeft(t => t - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (currentGame === 'click' && gameTimeLeft === 0 && clickCount >= 20) {
+      setGameWon(true);
+      setTimeout(() => {
+        setSearchQuery('hodkovice');
+      }, 2000);
+    }
+  }, [currentGame, gameTimeLeft, clickCount]);
+
+  // Math game timer
+  useEffect(() => {
+    if (currentGame === 'math' && gameTimeLeft > 0 && !gameWon) {
+      const timer = setTimeout(() => setGameTimeLeft(t => t - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentGame, gameTimeLeft, gameWon]);
+
+  // Memory game show sequence
+  useEffect(() => {
+    if (currentGame === 'memory' && memoryShowIndex >= 0 && memoryShowIndex < memorySequence.length) {
+      const timer = setTimeout(() => {
+        setMemoryShowIndex(i => i + 1);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [currentGame, memoryShowIndex, memorySequence]);
+
+  const handleMemoryClick = (colorIndex) => {
+    if (memoryShowIndex < memorySequence.length) return;
+    const newSeq = [...playerSequence, colorIndex];
+    setPlayerSequence(newSeq);
+    if (newSeq[newSeq.length - 1] !== memorySequence[newSeq.length - 1]) {
+      // Wrong!
+      setPlayerSequence([]);
+      setMemoryShowIndex(0);
+    } else if (newSeq.length === memorySequence.length) {
+      // Won!
+      setGameWon(true);
+      setTimeout(() => {
+        setSearchQuery('hodkovice');
+      }, 2000);
+    }
+  };
+
+  const checkMathAnswer = () => {
+    if (parseInt(mathAnswer) === mathProblem.answer) {
+      const newScore = mathScore + 1;
+      setMathScore(newScore);
+      if (newScore >= 5) {
+        setGameWon(true);
+        setTimeout(() => {
+          setSearchQuery('hodkovice');
+        }, 2000);
+      } else {
+        generateMathProblem();
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   const cropBounds = getTileBounds(center, tileZoom, gridSize);
-  const isEasterEggDismissed = searchQuery.toLowerCase().includes('hodkovice');
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose} ref={modalRef}>
-      {/* Windows 98 Easter Egg - PETR SVETR everywhere! */}
+      {/* Mysterious Eye Quiz Easter Egg */}
       {!isEasterEggDismissed && (
         <div
-          className="fixed inset-0 z-[9999] overflow-hidden"
+          className="fixed inset-0 z-[9999] overflow-hidden flex items-center justify-center"
           style={{
-            background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff0000, #00ff00, #0000ff)',
-            backgroundSize: '400% 400%',
-            animation: 'rainbow 8s ease infinite',
+            background: 'radial-gradient(ellipse at center, #1a0a2e 0%, #0d0015 50%, #000 100%)',
           }}
         >
           <style>{`
-            @keyframes rainbow {
-              0% { background-position: 0% 50%; }
-              50% { background-position: 100% 50%; }
-              100% { background-position: 0% 50%; }
+            @keyframes eyePulse {
+              0%, 100% { transform: scale(1); filter: drop-shadow(0 0 30px #9333ea); }
+              50% { transform: scale(1.05); filter: drop-shadow(0 0 60px #c084fc); }
             }
-            @keyframes blink98 {
-              0%, 70% { opacity: 1; }
-              71%, 100% { opacity: 0; }
+            @keyframes irisGlow {
+              0%, 100% { fill: #7c3aed; }
+              33% { fill: #06b6d4; }
+              66% { fill: #f59e0b; }
             }
-            @keyframes colorChange {
-              0%, 33% { color: #ff00ff; }
-              34%, 66% { color: #00ffff; }
-              67%, 100% { color: #ffff00; }
+            @keyframes numberSpin {
+              0% { transform: rotateX(0deg); }
+              100% { transform: rotateX(360deg); }
             }
-            @keyframes shake {
-              0%, 100% { transform: translate(0, 0) rotate(0deg); }
-              25% { transform: translate(-5px, 5px) rotate(-2deg); }
-              50% { transform: translate(5px, -5px) rotate(2deg); }
-              75% { transform: translate(-5px, -5px) rotate(-2deg); }
+            @keyframes mysticalFloat {
+              0%, 100% { transform: translateY(0) rotate(-3deg); }
+              50% { transform: translateY(-10px) rotate(3deg); }
             }
-            @keyframes float {
-              0%, 100% { transform: translateY(0); }
-              50% { transform: translateY(-15px); }
+            @keyframes starTwinkle {
+              0%, 100% { opacity: 0.3; }
+              50% { opacity: 1; }
+            }
+            @keyframes successPulse {
+              0%, 100% { transform: scale(1); }
+              50% { transform: scale(1.2); }
             }
           `}</style>
 
-          {/* PETR SVETR scattered everywhere */}
-          {[...Array(25)].map((_, i) => (
+          {/* Mystical stars background */}
+          {[...Array(50)].map((_, i) => (
             <div
               key={i}
               style={{
                 position: 'absolute',
-                left: `${(i * 17) % 95}%`,
-                top: `${(i * 23) % 90}%`,
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                width: `${2 + Math.random() * 4}px`,
+                height: `${2 + Math.random() * 4}px`,
+                background: ['#fff', '#c084fc', '#06b6d4', '#f59e0b'][i % 4],
+                borderRadius: '50%',
+                animation: `starTwinkle ${2 + Math.random() * 3}s ease-in-out infinite`,
+                animationDelay: `${Math.random() * 2}s`,
+                pointerEvents: 'none',
+              }}
+            />
+          ))}
+
+          {/* PETR SVETR floating around */}
+          {[...Array(12)].map((_, i) => (
+            <div
+              key={`petr-${i}`}
+              style={{
+                position: 'absolute',
+                left: `${(i * 25) % 90 + 5}%`,
+                top: `${(i * 31) % 85 + 5}%`,
                 fontFamily: '"Comic Sans MS", cursive',
-                fontSize: `${18 + (i % 4) * 12}px`,
+                fontSize: `${14 + (i % 3) * 8}px`,
                 fontWeight: 'bold',
-                color: ['#ff00ff', '#00ffff', '#ffff00', '#ff0000', '#00ff00'][i % 5],
-                textShadow: '3px 3px 0 #000',
-                animation: `colorChange ${3 + (i % 5)}s ease infinite, float ${4 + (i % 3) * 2}s ease-in-out infinite`,
-                animationDelay: `${i * 0.3}s`,
-                transform: `rotate(${(i * 25) % 360 - 180}deg)`,
+                color: ['#c084fc', '#06b6d4', '#f59e0b', '#ec4899'][i % 4],
+                textShadow: '2px 2px 4px #000',
+                animation: `mysticalFloat ${5 + (i % 4)}s ease-in-out infinite`,
+                animationDelay: `${i * 0.5}s`,
+                transform: `rotate(${(i * 30) % 360 - 180}deg)`,
+                opacity: 0.7,
                 pointerEvents: 'none',
               }}
             >
@@ -695,77 +889,348 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
             </div>
           ))}
 
-          {/* Main center text */}
-          <div
-            className="absolute inset-0 flex items-center justify-center"
-            style={{ animation: 'shake 3s ease infinite' }}
-          >
-            <div className="text-center">
-              <div
-                style={{
+          {/* Main content */}
+          <div className="text-center relative z-10">
+            {/* Game won */}
+            {gameWon ? (
+              <div style={{ animation: 'successPulse 0.5s ease infinite' }}>
+                <div style={{ fontSize: '120px' }}>🏆</div>
+                <div style={{
                   fontFamily: '"Comic Sans MS", cursive',
-                  fontSize: '80px',
-                  fontWeight: 'bold',
-                  textShadow: '6px 6px 0 #000, -6px -6px 0 #ff00ff, 6px -6px 0 #00ffff, -6px 6px 0 #ffff00',
-                  color: '#fff',
-                  animation: 'blink98 2s step-end infinite',
-                  pointerEvents: 'none',
-                }}
-              >
-                🎉 PETR SVETR 🎉
-              </div>
-              <div
-                style={{
-                  fontFamily: '"Comic Sans MS", cursive',
-                  fontSize: '28px',
-                  color: '#00ff00',
-                  textShadow: '3px 3px 0 #000',
+                  fontSize: '48px',
+                  color: '#22c55e',
+                  textShadow: '0 0 20px #22c55e',
                   marginTop: '20px',
-                  animation: 'colorChange 4s ease infinite',
-                  pointerEvents: 'none',
-                }}
-              >
-                ★★★ VÍTEJTE V MATRIXU ★★★
-              </div>
-              <div
-                style={{
+                }}>
+                  VÍTĚZ!
+                </div>
+                <div style={{
                   fontFamily: 'monospace',
-                  fontSize: '16px',
-                  color: '#fff',
-                  marginTop: '30px',
-                  background: 'rgba(0,0,0,0.9)',
-                  padding: '15px 25px',
-                  border: '4px solid #ff00ff',
-                  pointerEvents: 'none',
-                }}
-              >
-                💡 Kde bydlí autor? Napiš odpověď: 💡
+                  fontSize: '18px',
+                  color: '#a855f7',
+                  marginTop: '10px',
+                }}>
+                  Jsi hoden vstupu... 👁️
+                </div>
               </div>
-              {/* Input field for the answer */}
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Napiš město..."
-                autoFocus
-                style={{
-                  marginTop: '20px',
-                  padding: '15px 30px',
-                  fontSize: '24px',
+            ) : showMiniGame ? (
+              <div>
+                {!currentGame ? (
+                  <>
+                    {/* Magic card selection */}
+                    <div style={{ fontSize: '80px', marginBottom: '20px' }}>🃏</div>
+                    <div style={{
+                      fontFamily: '"Comic Sans MS", cursive',
+                      fontSize: '32px',
+                      color: '#f59e0b',
+                      textShadow: '0 0 20px #f59e0b',
+                      marginBottom: '30px',
+                    }}>
+                      ✨ VYBER SI MINI HRU ✨
+                    </div>
+                    <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      {miniGames.map(game => (
+                        <button
+                          key={game.id}
+                          onClick={() => startGame(game.id)}
+                          style={{
+                            padding: '20px 30px',
+                            fontSize: '18px',
+                            fontFamily: '"Comic Sans MS", cursive',
+                            background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
+                            border: '3px solid #6366f1',
+                            borderRadius: '12px',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            minWidth: '200px',
+                            transition: 'all 0.3s',
+                          }}
+                          onMouseOver={e => e.target.style.transform = 'scale(1.05)'}
+                          onMouseOut={e => e.target.style.transform = 'scale(1)'}
+                        >
+                          <div style={{ fontSize: '24px', marginBottom: '10px' }}>{game.name}</div>
+                          <div style={{ fontSize: '14px', color: '#a5b4fc' }}>{game.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : currentGame === 'click' ? (
+                  <>
+                    {/* Click game */}
+                    <div style={{ fontSize: '60px', marginBottom: '20px' }}>🖱️</div>
+                    <div style={{
+                      fontFamily: '"Comic Sans MS", cursive',
+                      fontSize: '28px',
+                      color: '#ec4899',
+                      marginBottom: '20px',
+                    }}>
+                      Klikni 20x! Zbývá: {gameTimeLeft}s
+                    </div>
+                    <div style={{
+                      fontSize: '72px',
+                      fontFamily: 'monospace',
+                      color: clickCount >= 20 ? '#22c55e' : '#fff',
+                      marginBottom: '20px',
+                    }}>
+                      {clickCount} / 20
+                    </div>
+                    <button
+                      onClick={() => gameTimeLeft > 0 && setClickCount(c => c + 1)}
+                      disabled={gameTimeLeft === 0}
+                      style={{
+                        padding: '40px 80px',
+                        fontSize: '24px',
+                        fontFamily: '"Comic Sans MS", cursive',
+                        background: gameTimeLeft > 0 ? 'linear-gradient(135deg, #ec4899, #f472b6)' : '#666',
+                        border: 'none',
+                        borderRadius: '20px',
+                        color: '#fff',
+                        cursor: gameTimeLeft > 0 ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      {gameTimeLeft > 0 ? '👆 KLIKEJ! 👆' : (clickCount >= 20 ? '✅ HOTOVO!' : '❌ KONEC')}
+                    </button>
+                  </>
+                ) : currentGame === 'memory' ? (
+                  <>
+                    {/* Memory game */}
+                    <div style={{ fontSize: '60px', marginBottom: '20px' }}>🧠</div>
+                    <div style={{
+                      fontFamily: '"Comic Sans MS", cursive',
+                      fontSize: '24px',
+                      color: '#06b6d4',
+                      marginBottom: '20px',
+                    }}>
+                      {memoryShowIndex < memorySequence.length ? 'Zapamatuj si!' : 'Opakuj sekvenci!'}
+                    </div>
+                    <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginBottom: '20px' }}>
+                      {['#ef4444', '#22c55e', '#3b82f6', '#f59e0b'].map((color, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleMemoryClick(i)}
+                          disabled={memoryShowIndex < memorySequence.length}
+                          style={{
+                            width: '80px',
+                            height: '80px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            background: color,
+                            opacity: memoryShowIndex < memorySequence.length
+                              ? (memorySequence[memoryShowIndex] === i ? 1 : 0.3)
+                              : 0.8,
+                            cursor: memoryShowIndex >= memorySequence.length ? 'pointer' : 'default',
+                            transform: memoryShowIndex < memorySequence.length && memorySequence[memoryShowIndex] === i
+                              ? 'scale(1.2)'
+                              : 'scale(1)',
+                            transition: 'all 0.3s',
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#64748b' }}>
+                      Krok: {playerSequence.length} / {memorySequence.length}
+                    </div>
+                  </>
+                ) : currentGame === 'math' ? (
+                  <>
+                    {/* Math game */}
+                    <div style={{ fontSize: '60px', marginBottom: '20px' }}>🔢</div>
+                    <div style={{
+                      fontFamily: '"Comic Sans MS", cursive',
+                      fontSize: '24px',
+                      color: '#a855f7',
+                      marginBottom: '10px',
+                    }}>
+                      Čas: {gameTimeLeft}s | Skóre: {mathScore}/5
+                    </div>
+                    {mathProblem && gameTimeLeft > 0 && (
+                      <>
+                        <div style={{
+                          fontSize: '48px',
+                          fontFamily: 'monospace',
+                          color: '#fff',
+                          marginBottom: '20px',
+                        }}>
+                          {mathProblem.a} {mathProblem.op} {mathProblem.b} = ?
+                        </div>
+                        <input
+                          type="number"
+                          value={mathAnswer}
+                          onChange={e => setMathAnswer(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && checkMathAnswer()}
+                          autoFocus
+                          style={{
+                            padding: '15px 30px',
+                            fontSize: '28px',
+                            fontFamily: 'monospace',
+                            border: '3px solid #a855f7',
+                            borderRadius: '8px',
+                            background: 'rgba(0,0,0,0.8)',
+                            color: '#a855f7',
+                            textAlign: 'center',
+                            outline: 'none',
+                            width: '150px',
+                          }}
+                        />
+                        <div style={{ marginTop: '15px' }}>
+                          <button
+                            onClick={checkMathAnswer}
+                            style={{
+                              padding: '12px 40px',
+                              fontSize: '18px',
+                              fontFamily: '"Comic Sans MS", cursive',
+                              background: 'linear-gradient(135deg, #9333ea, #c084fc)',
+                              border: 'none',
+                              borderRadius: '8px',
+                              color: '#fff',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Odpovědět
+                          </button>
+                        </div>
+                      </>
+                    )}
+                    {gameTimeLeft === 0 && mathScore < 5 && (
+                      <div style={{ color: '#ef4444', fontSize: '24px' }}>❌ Čas vypršel!</div>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            ) : showSuccess ? (
+              <div style={{ animation: 'successPulse 0.5s ease infinite' }}>
+                <div style={{ fontSize: '120px' }}>✅</div>
+                <div style={{
                   fontFamily: '"Comic Sans MS", cursive',
-                  border: '4px solid #00ff00',
-                  borderRadius: '0',
-                  background: '#000',
-                  color: '#00ff00',
-                  textAlign: 'center',
-                  outline: 'none',
-                  width: '300px',
-                }}
-              />
-              <div style={{ marginTop: '25px', fontSize: '50px', animation: 'colorChange 2s ease infinite', pointerEvents: 'none' }}>
-                👾 🕹️ 💾 📟 🖥️ 🎮 💿 👾
+                  fontSize: '48px',
+                  color: '#22c55e',
+                  textShadow: '0 0 20px #22c55e',
+                  marginTop: '20px',
+                }}>
+                  SPRÁVNĚ!
+                </div>
+                <div style={{
+                  fontFamily: 'monospace',
+                  fontSize: '18px',
+                  color: '#a855f7',
+                  marginTop: '10px',
+                }}>
+                  Připrav se na mini hru... 🎮
+                </div>
               </div>
-            </div>
+            ) : (
+              <>
+                {/* The Mysterious Eye */}
+                <div style={{ animation: 'eyePulse 3s ease-in-out infinite', marginBottom: '30px' }}>
+                  <svg width="200" height="120" viewBox="0 0 200 120">
+                    {/* Eye outline */}
+                    <ellipse cx="100" cy="60" rx="90" ry="50" fill="none" stroke="#9333ea" strokeWidth="4" />
+                    {/* Iris */}
+                    <circle cx="100" cy="60" r="35" style={{ animation: 'irisGlow 4s ease infinite' }} />
+                    {/* Pupil with number */}
+                    <circle cx="100" cy="60" r="18" fill="#000" />
+                    {/* Number in pupil */}
+                    <text
+                      x="100"
+                      y="68"
+                      textAnchor="middle"
+                      fill="#fff"
+                      fontSize="24"
+                      fontFamily="monospace"
+                      fontWeight="bold"
+                      style={isDrawing ? { animation: 'numberSpin 0.1s linear infinite' } : {}}
+                    >
+                      {isDrawing ? drawingNumber : quizQuestion?.id || '?'}
+                    </text>
+                    {/* Eye shine */}
+                    <circle cx="115" cy="50" r="8" fill="rgba(255,255,255,0.6)" />
+                  </svg>
+                </div>
+
+                {/* Title */}
+                <div style={{
+                  fontFamily: '"Comic Sans MS", cursive',
+                  fontSize: '36px',
+                  color: '#c084fc',
+                  textShadow: '0 0 20px #9333ea',
+                  marginBottom: '20px',
+                }}>
+                  {isDrawing ? '🔮 Losuji otázku... 🔮' : '👁️ OKO POZNÁNÍ 👁️'}
+                </div>
+
+                {/* Question */}
+                {!isDrawing && quizQuestion && (
+                  <>
+                    <div style={{
+                      fontFamily: 'monospace',
+                      fontSize: '14px',
+                      color: '#64748b',
+                      marginBottom: '10px',
+                    }}>
+                      Otázka č. {quizQuestion.id} z 10
+                    </div>
+                    <div style={{
+                      fontFamily: '"Comic Sans MS", cursive',
+                      fontSize: '24px',
+                      color: '#fff',
+                      textShadow: '0 0 10px #c084fc',
+                      marginBottom: '10px',
+                      maxWidth: '500px',
+                      padding: '0 20px',
+                    }}>
+                      {quizQuestion.hint} {quizQuestion.question}
+                    </div>
+                    <input
+                      type="text"
+                      value={quizAnswer}
+                      onChange={e => setQuizAnswer(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && checkAnswer()}
+                      placeholder="Tvoje odpověď..."
+                      autoFocus
+                      style={{
+                        marginTop: '20px',
+                        padding: '15px 30px',
+                        fontSize: '20px',
+                        fontFamily: 'monospace',
+                        border: '3px solid #9333ea',
+                        borderRadius: '8px',
+                        background: 'rgba(0,0,0,0.8)',
+                        color: '#c084fc',
+                        textAlign: 'center',
+                        outline: 'none',
+                        width: '300px',
+                      }}
+                    />
+                    <div style={{ marginTop: '15px' }}>
+                      <button
+                        onClick={checkAnswer}
+                        style={{
+                          padding: '12px 40px',
+                          fontSize: '18px',
+                          fontFamily: '"Comic Sans MS", cursive',
+                          background: 'linear-gradient(135deg, #9333ea, #c084fc)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          textShadow: '1px 1px 2px #000',
+                        }}
+                      >
+                        ✨ Odpovědět ✨
+                      </button>
+                    </div>
+                    <div style={{
+                      fontFamily: 'monospace',
+                      fontSize: '12px',
+                      color: '#64748b',
+                      marginTop: '30px',
+                    }}>
+                      Odpověz správně a odhalíš tajemství... 🌟
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
