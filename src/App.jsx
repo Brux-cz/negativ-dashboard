@@ -666,7 +666,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     { id: 3, question: "Který den v měsíci má Petr narozeniny?", answer: "31", hint: "Poslední den v měsíci který má 31 dní" },
     { id: 4, question: "Jak se jmenuje Petrova babička?", answer: "svatava", hint: "Staročeské jméno, zní trochu svatě" },
     { id: 5, question: "Jaký je Petrův oblíbený seriál?", answer: "supernatural", hint: "Dva bratři loví démony a příšery, 15 sérií" },
-    { id: 6, question: "Máte Petra rádi?", answer: "ano", hint: null },
+    { id: 6, question: "Máte Petra rádi?", answer: "ano", hint: "Opravdu se ptáš???" },
     { id: 7, question: "Ve které vesnici Petr bydlel?", answer: "hodkovice", hint: "TRAP" },
     { id: 8, question: "Jaká je Petrova oblíbená barva?", answer: "zelená", hint: "Barva trávy, lesa a přírody" },
     { id: 9, question: "Kolik má Petr sourozenců?", answer: "2", hint: "Více než jeden, méně než tři" },
