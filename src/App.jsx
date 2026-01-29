@@ -143,18 +143,19 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
 
   const savedSettings = loadSettings();
 
-  const [selectedSource, setSelectedSource] = useState(() =>
-    orthoSources.find(s => s.id === savedSettings?.sourceId) || orthoSources[0]
-  );
+  const [selectedSource] = useState(orthoSources[0]);
   const [center, setCenter] = useState(savedSettings?.center || null);
   const [mapView, setMapView] = useState(savedSettings?.mapView || [50.0755, 14.4378]);
   const [mapZoom, setMapZoom] = useState(savedSettings?.mapZoom || 14);
   const [tileZoom, setTileZoom] = useState(savedSettings?.tileZoom || 18);
-  const [gridSize, setGridSize] = useState(savedSettings?.gridSize || 5);
+  const [gridSize, setGridSize] = useState(savedSettings?.gridSize || 7);
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentMapZoom, setCurrentMapZoom] = useState(14);
+  const [searchResults, setSearchResults] = useState([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [searching, setSearching] = useState(false);
 
   const handleZoomChange = useCallback((zoom) => {
     setCurrentMapZoom(Math.round(zoom));
@@ -163,7 +164,6 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   // Save settings to localStorage
   useEffect(() => {
     const settings = {
-      sourceId: selectedSource.id,
       center,
       mapView,
       mapZoom,
@@ -171,9 +171,9 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
       gridSize,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize]);
+  }, [center, mapView, mapZoom, tileZoom, gridSize]);
 
-  // Pixel sizes (must be odd number of tiles for center alignment)
+  // Pixel sizes
   const pixelSizes = [
     { value: 7, pixels: 1792, label: '1792 px' },
     { value: 11, pixels: 2816, label: '2816 px' },
@@ -184,33 +184,58 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   ];
 
   const tileZooms = [
-    { value: 17, label: '17', desc: '~1.2 km' },
-    { value: 18, label: '18', desc: '~600 m' },
-    { value: 19, label: '19', desc: '~300 m' },
-    { value: 20, label: '20', desc: '~150 m' },
-    { value: 21, label: '21', desc: '~75 m' },
+    { value: 17, label: '17' },
+    { value: 18, label: '18' },
+    { value: 19, label: '19' },
+    { value: 20, label: '20' },
+    { value: 21, label: '21' },
   ];
 
   const handleMapClick = useCallback((latlng) => {
     setCenter(latlng);
   }, []);
 
-  const handleSearch = () => {
-    const locations = {
-      'praha': [50.0755, 14.4378],
-      'brno': [49.1951, 16.6068],
-      'ostrava': [49.8209, 18.2625],
-      'plzen': [49.7384, 13.3736],
-      'liberec': [50.7663, 15.0543],
-      'olomouc': [49.5938, 17.2509],
-      'hradec': [50.2104, 15.8252],
-      'pardubice': [50.0343, 15.7812],
-    };
-    const query = searchQuery.toLowerCase().trim();
-    if (locations[query]) {
-      setMapView(locations[query]);
-      setMapZoom(15);
+  // Real geocoding search using Nominatim
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+
+    // Check if input is coordinates (lat, lon)
+    const coordMatch = searchQuery.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lon = parseFloat(coordMatch[2]);
+      if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        setCenter([lat, lon]);
+        setMapView([lat, lon]);
+        setMapZoom(17);
+        setSearchResults([]);
+        return;
+      }
     }
+
+    setSearching(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5&addressdetails=1`
+      );
+      const data = await response.json();
+      setSearchResults(data.map(item => ({
+        name: item.display_name,
+        lat: parseFloat(item.lat),
+        lon: parseFloat(item.lon),
+      })));
+    } catch (e) {
+      console.error('Search failed:', e);
+    }
+    setSearching(false);
+  };
+
+  const selectSearchResult = (result) => {
+    setCenter([result.lat, result.lon]);
+    setMapView([result.lat, result.lon]);
+    setMapZoom(17);
+    setSearchResults([]);
+    setSearchQuery('');
   };
 
   // Download tiles and stitch them
@@ -227,13 +252,11 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
       const tileSize = 256;
       const totalSize = gridSize * tileSize;
 
-      // Create canvas
       const canvas = document.createElement('canvas');
       canvas.width = totalSize;
       canvas.height = totalSize;
       const ctx = canvas.getContext('2d');
 
-      // Calculate tiles to fetch
       const tiles = [];
       for (let dy = -halfGrid; dy <= halfGrid; dy++) {
         for (let dx = -halfGrid; dx <= halfGrid; dx++) {
@@ -246,7 +269,6 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
         }
       }
 
-      // Load tile using Image element (works better with CORS)
       const loadTile = (tile) => {
         return new Promise((resolve) => {
           const img = new Image();
@@ -256,20 +278,14 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
             resolve(true);
           };
           img.onerror = () => {
-            // Draw placeholder for failed tiles
             ctx.fillStyle = '#e5e5e5';
             ctx.fillRect(tile.canvasX, tile.canvasY, tileSize, tileSize);
-            ctx.fillStyle = '#a3a3a3';
-            ctx.font = '10px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('×', tile.canvasX + tileSize/2, tile.canvasY + tileSize/2 + 4);
             resolve(false);
           };
           img.src = selectedSource.tileUrl(tileZoom, tile.x, tile.y);
         });
       };
 
-      // Download tiles in batches to avoid overwhelming the server
       const batchSize = 10;
       let loaded = 0;
       const totalTiles = tiles.length;
@@ -281,15 +297,13 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
         setDownloadProgress((loaded / totalTiles) * 100);
       }
 
-      // Download canvas as PNG
       canvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.download = `ortho-z${tileZoom}-${gridSize}x${gridSize}-${Date.now()}.png`;
+        link.download = `ortho-z${tileZoom}-${gridSize * 256}px-${Date.now()}.png`;
         link.href = url;
         link.click();
         URL.revokeObjectURL(url);
-
         setDownloading(false);
         setDownloadProgress(0);
       }, 'image/png');
@@ -301,35 +315,26 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     }
   };
 
-  // Calculate area info
-  const getAreaInfo = () => {
-    const metersPerTile = 40075016.686 * Math.cos(center ? center[0] * Math.PI / 180 : 50 * Math.PI / 180) / Math.pow(2, tileZoom);
-    const areaSize = (metersPerTile * gridSize / 1000).toFixed(2);
-    const pixels = gridSize * 256;
-    return { areaSize, pixels };
-  };
-
   if (!isOpen) return null;
 
   const cropBounds = getTileBounds(center, tileZoom, gridSize);
-  const areaInfo = getAreaInfo();
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-sm w-full h-full shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-4 border-b border-neutral-200 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-neutral-900 rounded-sm flex items-center justify-center">
-              <Map className="w-4 h-4 text-white" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-neutral-900 rounded-sm flex items-center justify-center">
+              <Map className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-base font-medium">Ortho Map Downloader</h2>
-              <p className="text-[10px] text-neutral-400">Stahování tiles ve správném rozlišení</p>
+              <h2 className="text-lg font-medium">Ortho Map Downloader</h2>
+              <p className="text-sm text-neutral-400">Klikni na mapu pro nastavení středu</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900">
-            <X className="w-4 h-4" />
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900 p-2">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -342,17 +347,13 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               zoom={mapZoom}
               className="h-full w-full"
             >
-              <TileLayer
-                url={selectedSource.url}
-                maxZoom={21}
-              />
+              <TileLayer url={selectedSource.url} maxZoom={21} />
               <MapClickHandler onMapClick={handleMapClick} onZoomChange={handleZoomChange} />
 
-              {/* Center marker */}
               {center && (
                 <Marker position={center} icon={centerIcon}>
                   <Popup>
-                    <div className="text-xs">
+                    <div className="text-sm">
                       <div className="font-medium">Střed výřezu</div>
                       <div className="font-mono text-neutral-500">
                         {center[0].toFixed(6)}, {center[1].toFixed(6)}
@@ -362,7 +363,6 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 </Marker>
               )}
 
-              {/* Crop rectangle */}
               {cropBounds && (
                 <Rectangle
                   bounds={cropBounds}
@@ -377,16 +377,16 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               )}
             </MapContainer>
 
-            {/* Map overlay - instructions */}
-            <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm px-3 py-2 rounded-sm text-xs shadow-sm">
-              <span className="text-neutral-500">Klikni na mapu</span> pro nastavení středu
+            {/* Zoom indicator */}
+            <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-2 rounded-sm shadow-sm">
+              <div className="text-sm font-mono font-bold">Zoom: {currentMapZoom}</div>
             </div>
 
-            {/* Center info overlay */}
+            {/* Center info */}
             {center && (
-              <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm px-3 py-2 rounded-sm shadow-sm">
-                <div className="text-[10px] text-neutral-400 mb-0.5">Střed výřezu</div>
-                <div className="text-xs font-mono text-neutral-900">
+              <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm px-4 py-3 rounded-sm shadow-sm">
+                <div className="text-xs text-neutral-400 mb-1">Střed výřezu</div>
+                <div className="text-sm font-mono font-medium">
                   {center[0].toFixed(6)}, {center[1].toFixed(6)}
                 </div>
               </div>
@@ -394,158 +394,149 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
           </div>
 
           {/* Sidebar */}
-          <div className="w-80 border-l border-neutral-200 p-4 overflow-y-auto shrink-0">
+          <div className="w-96 border-l border-neutral-200 p-5 overflow-y-auto shrink-0">
             {/* Search */}
-            <div className="mb-5">
-              <label className="text-xs font-medium text-neutral-700 mb-1.5 block">Hledat místo</label>
-              <div className="flex gap-1.5">
+            <div className="mb-6">
+              <label className="text-sm font-medium text-neutral-700 mb-2 block">Hledat místo nebo zadat koordináty</label>
+              <div className="flex gap-2">
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                  placeholder="Praha, Brno, Ostrava..."
-                  className="flex-1 px-2.5 py-1.5 text-sm border border-neutral-200 rounded-sm focus:outline-none focus:border-neutral-400"
+                  placeholder="Adresa nebo 50.0755, 14.4378"
+                  className="flex-1 px-3 py-2 text-sm border border-neutral-200 rounded-sm focus:outline-none focus:border-neutral-400"
                 />
-                <button onClick={handleSearch} className="px-2.5 py-1.5 bg-neutral-100 rounded-sm hover:bg-neutral-200">
-                  <MapPin className="w-4 h-4 text-neutral-600" />
+                <button
+                  onClick={handleSearch}
+                  disabled={searching}
+                  className="px-3 py-2 bg-neutral-900 text-white rounded-sm hover:bg-neutral-800 disabled:bg-neutral-300"
+                >
+                  {searching ? '...' : <MapPin className="w-4 h-4" />}
                 </button>
               </div>
-            </div>
 
-            {/* Source info */}
-            <div className="mb-5 p-2 bg-neutral-50 rounded-sm">
-              <div className="text-[10px] text-neutral-400">Zdroj: <span className="text-neutral-700 font-medium">Google Satellite</span></div>
-            </div>
-
-            {/* Current map zoom display */}
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-[10px] text-blue-600 uppercase tracking-wider">Aktuální zoom mapy</div>
-                  <div className="text-lg font-bold text-blue-900">{currentMapZoom}</div>
+              {/* Search results */}
+              {searchResults.length > 0 && (
+                <div className="mt-2 border border-neutral-200 rounded-sm max-h-48 overflow-y-auto">
+                  {searchResults.map((result, i) => (
+                    <button
+                      key={i}
+                      onClick={() => selectSearchResult(result)}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
+                    >
+                      <div className="truncate">{result.name}</div>
+                      <div className="text-xs font-mono text-neutral-400">
+                        {result.lat.toFixed(5)}, {result.lon.toFixed(5)}
+                      </div>
+                    </button>
+                  ))}
                 </div>
+              )}
+            </div>
+
+            {/* Tile Zoom */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-neutral-700">Zoom pro stažení</label>
                 <button
                   onClick={() => setTileZoom(Math.min(21, Math.max(17, currentMapZoom)))}
-                  className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-sm hover:bg-blue-700 transition-colors"
+                  className="text-xs text-blue-600 hover:text-blue-800"
                 >
-                  Použít
+                  Použít aktuální ({currentMapZoom})
                 </button>
               </div>
-              <p className="text-[10px] text-blue-500 mt-1">
-                Přibliž/oddaluj mapu pro změnu detailu
-              </p>
-            </div>
-
-            {/* Tile Zoom (detail level) */}
-            <div className="mb-5">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-neutral-700">Tile Zoom pro stažení</label>
-                <span className="text-xs font-mono text-neutral-500">{tileZoom}</span>
-              </div>
-              <div className="grid grid-cols-5 gap-1">
+              <div className="flex gap-1">
                 {tileZooms.map(z => (
                   <button
                     key={z.value}
                     onClick={() => setTileZoom(z.value)}
-                    className={`p-2 rounded-sm border text-center transition-all ${
+                    className={`flex-1 py-2 rounded-sm border text-sm font-medium transition-all ${
                       tileZoom === z.value
-                        ? 'border-neutral-900 bg-neutral-50'
-                        : currentMapZoom === z.value
-                        ? 'border-blue-400 bg-blue-50'
+                        ? 'border-neutral-900 bg-neutral-900 text-white'
                         : 'border-neutral-200 hover:border-neutral-400'
                     }`}
                   >
-                    <div className="text-xs font-bold text-neutral-900">{z.label}</div>
-                    <div className="text-[8px] text-neutral-400">{z.desc}</div>
+                    {z.label}
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-neutral-400 mt-1.5">
-                {tileZoom === currentMapZoom
-                  ? '✓ Stahuje se stejný detail jako vidíš'
-                  : `Stahuje zoom ${tileZoom}, zobrazuješ zoom ${currentMapZoom}`}
-              </p>
             </div>
 
             {/* Pixel size */}
-            <div className="mb-5">
-              <label className="text-xs font-medium text-neutral-700 mb-1.5 block">Velikost výřezu (px)</label>
-              <div className="grid grid-cols-2 gap-1.5">
+            <div className="mb-6">
+              <label className="text-sm font-medium text-neutral-700 mb-2 block">Velikost výřezu</label>
+              <div className="grid grid-cols-3 gap-2">
                 {pixelSizes.map(p => (
                   <button
                     key={p.value}
                     onClick={() => setGridSize(p.value)}
-                    className={`p-2 rounded-sm border text-center transition-all ${
+                    className={`py-2 rounded-sm border text-sm font-medium transition-all ${
                       gridSize === p.value
-                        ? 'border-neutral-900 bg-neutral-50'
+                        ? 'border-neutral-900 bg-neutral-900 text-white'
                         : 'border-neutral-200 hover:border-neutral-400'
                     }`}
                   >
-                    <div className="text-xs font-bold text-neutral-900">{p.label}</div>
-                    <div className="text-[9px] text-neutral-400">{p.value * p.value} tiles</div>
+                    {p.label}
                   </button>
                 ))}
               </div>
-              {gridSize > 20 && (
-                <p className="text-[10px] text-amber-600 mt-1.5">
-                  ⚠ Velký výřez - stahování může trvat déle
-                </p>
+            </div>
+
+            {/* Advanced info - collapsible */}
+            <div className="mb-6">
+              <button
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700"
+              >
+                <ChevronRight className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
+                Podrobnosti
+              </button>
+              {showAdvanced && (
+                <div className="mt-3 p-3 bg-neutral-50 rounded-sm text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-neutral-500">Rozlišení:</span>
+                    <span className="font-mono">{gridSize * 256} × {gridSize * 256} px</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-neutral-500">Tiles:</span>
+                    <span className="font-mono">{gridSize * gridSize}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-neutral-500">Zdroj:</span>
+                    <span>Google Satellite</span>
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* Output info */}
-            <div className="mb-5 p-3 bg-neutral-50 rounded-sm">
-              <div className="text-[10px] uppercase tracking-wider text-neutral-400 mb-2">Výstup</div>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="text-neutral-500">Rozlišení:</span>
-                  <span className="font-mono font-medium">{areaInfo.pixels}×{areaInfo.pixels} px</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-neutral-500">Pokrytí:</span>
-                  <span className="font-mono font-medium">~{areaInfo.areaSize}×{areaInfo.areaSize} km</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-neutral-500">Tiles:</span>
-                  <span className="font-mono font-medium">{gridSize * gridSize}</span>
-                </div>
-              </div>
-            </div>
-
             {/* Download button */}
-            <div className="pt-4 border-t border-neutral-100">
+            <div className="pt-4 border-t border-neutral-200">
               {downloading ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-neutral-600">Stahuji tiles...</span>
-                    <span className="font-mono text-neutral-400">{Math.round(downloadProgress)}%</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Stahuji tiles...</span>
+                    <span className="font-mono">{Math.round(downloadProgress)}%</span>
                   </div>
-                  <div className="w-full bg-neutral-100 rounded-full h-1.5">
-                    <div className="bg-neutral-900 h-1.5 rounded-full transition-all" style={{ width: `${downloadProgress}%` }} />
+                  <div className="w-full bg-neutral-200 rounded-full h-2">
+                    <div className="bg-neutral-900 h-2 rounded-full transition-all" style={{ width: `${downloadProgress}%` }} />
                   </div>
                 </div>
               ) : (
                 <button
                   onClick={handleDownload}
                   disabled={!center}
-                  className="w-full py-2.5 bg-neutral-900 text-white text-sm rounded-sm hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-3 bg-neutral-900 text-white text-sm font-medium rounded-sm hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 flex items-center justify-center gap-2"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-5 h-5" />
                   Stáhnout PNG
                 </button>
               )}
               {!center && (
-                <p className="text-[10px] text-neutral-400 text-center mt-2">
-                  Nejprve klikni na mapu pro nastavení středu
+                <p className="text-sm text-neutral-400 text-center mt-3">
+                  Klikni na mapu pro výběr středu
                 </p>
               )}
-            </div>
-
-            {/* Saved indicator */}
-            <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-neutral-400">
-              <Check className="w-3 h-3" />
-              Nastavení se ukládá automaticky
             </div>
           </div>
         </div>
