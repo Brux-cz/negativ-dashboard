@@ -631,9 +631,89 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   const cropBounds = getTileBounds(center, tileZoom, gridSize);
+  const isEasterEggDismissed = searchQuery.toLowerCase().includes('hodkovice');
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose} ref={modalRef}>
+      {/* Windows 98 Easter Egg */}
+      {!isEasterEggDismissed && (
+        <div
+          className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center"
+          style={{
+            background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff0000, #00ff00, #0000ff)',
+            backgroundSize: '400% 400%',
+            animation: 'rainbow 2s ease infinite',
+          }}
+        >
+          <style>{`
+            @keyframes rainbow {
+              0% { background-position: 0% 50%; }
+              50% { background-position: 100% 50%; }
+              100% { background-position: 0% 50%; }
+            }
+            @keyframes blink98 {
+              0%, 49% { opacity: 1; }
+              50%, 100% { opacity: 0; }
+            }
+            @keyframes shake {
+              0%, 100% { transform: translate(0, 0) rotate(0deg); }
+              25% { transform: translate(-10px, 10px) rotate(-5deg); }
+              50% { transform: translate(10px, -10px) rotate(5deg); }
+              75% { transform: translate(-10px, -10px) rotate(-5deg); }
+            }
+            @keyframes pixelate {
+              0%, 100% { filter: blur(0px); }
+              50% { filter: blur(2px); }
+            }
+          `}</style>
+          <div
+            className="text-center"
+            style={{ animation: 'shake 0.3s ease infinite' }}
+          >
+            <div
+              style={{
+                fontFamily: '"Comic Sans MS", "MS Sans Serif", cursive',
+                fontSize: '72px',
+                fontWeight: 'bold',
+                textShadow: '4px 4px 0 #000, -4px -4px 0 #ff00ff, 4px -4px 0 #00ffff, -4px 4px 0 #ffff00',
+                color: '#fff',
+                animation: 'blink98 0.5s step-end infinite',
+                imageRendering: 'pixelated',
+              }}
+            >
+              🎉 ADAMA ADAM 🎉
+            </div>
+            <div
+              style={{
+                fontFamily: '"Comic Sans MS", cursive',
+                fontSize: '24px',
+                color: '#00ff00',
+                textShadow: '2px 2px 0 #000',
+                marginTop: '20px',
+                animation: 'blink98 0.3s step-end infinite',
+              }}
+            >
+              ★ WELCOME TO THE MATRIX ★
+            </div>
+            <div
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '14px',
+                color: '#ffff00',
+                marginTop: '40px',
+                background: 'rgba(0,0,0,0.8)',
+                padding: '10px',
+                border: '3px solid #ff00ff',
+              }}
+            >
+              💡 HINT: Napiš do vyhledávání kde bydlí autor... 💡
+            </div>
+            <div style={{ marginTop: '20px', fontSize: '48px', animation: 'blink98 0.2s step-end infinite' }}>
+              👾 🕹️ 💾 📟 🖥️ 👾
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-neutral-900 rounded-lg w-full h-full shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header - Dark */}
         <div className="px-5 py-4 border-b border-neutral-700 flex items-center justify-between shrink-0">
@@ -926,22 +1006,6 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       />
                     </div>
                   )}
-                </div>
-
-                {/* World File option */}
-                <div>
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={generateWorldFileFlag}
-                      onChange={e => setGenerateWorldFileFlag(e.target.checked)}
-                      className="w-4 h-4 rounded bg-neutral-700 border-neutral-600 text-white focus:ring-white focus:ring-offset-neutral-800"
-                    />
-                    <div>
-                      <span className="text-sm text-neutral-300 group-hover:text-white transition-colors">Generovat World File</span>
-                      <p className="text-xs text-neutral-500">.{imageFormat === 'jpg' ? 'jgw' : 'pgw'} pro GIS/CAD georeferenci</p>
-                    </div>
-                  </label>
                 </div>
 
                 {/* Info section */}
