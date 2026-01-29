@@ -1057,6 +1057,7 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
       {!isEasterEggDismissed && (
         <div
           className="fixed inset-0 z-[9999] overflow-hidden flex items-center justify-center"
+          onClick={e => e.stopPropagation()}
           style={{
             background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff0000, #00ff00, #0000ff)',
             backgroundSize: '400% 400%',
