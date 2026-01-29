@@ -358,13 +358,14 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [searching, setSearching] = useState(false);
 
-  // New state for enhanced features
-  const [imageFormat, setImageFormat] = useState(savedSettings?.imageFormat || 'png');
-  const [jpgQuality, setJpgQuality] = useState(savedSettings?.jpgQuality || 85);
+  // Image format hardcoded to JPG 85%
+  const imageFormat = 'jpg';
+  const jpgQuality = 85;
   const [useCustomSize, setUseCustomSize] = useState(false);
   const [customWidth, setCustomWidth] = useState(2048);
   const [customHeight, setCustomHeight] = useState(2048);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // keeping state but not using collapse
+  const [showDetails, setShowDetails] = useState(false);
   const modalRef = useRef(null);
   const mapContainerRef = useRef(null);
 
@@ -381,11 +382,9 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
       mapZoom,
       tileZoom,
       gridSize,
-      imageFormat,
-      jpgQuality,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize, imageFormat, jpgQuality]);
+  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize]);
 
   // Calculate actual output dimensions
   const outputDimensions = useMemo(() => {
@@ -1889,24 +1888,8 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
           </div>
 
           {/* Sidebar - Dark Mode */}
-          <div className={`${sidebarCollapsed ? 'w-12' : 'w-96'} bg-neutral-800 border-l border-neutral-700 overflow-y-auto shrink-0 transition-all duration-300`}>
-            {sidebarCollapsed ? (
-              <button
-                onClick={() => setSidebarCollapsed(false)}
-                className="w-full h-full flex items-center justify-center text-neutral-400 hover:text-white"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            ) : (
+          <div className="w-96 bg-neutral-800 border-l border-neutral-700 overflow-y-auto shrink-0">
               <div className="p-5 space-y-6">
-                {/* Collapse button */}
-                <button
-                  onClick={() => setSidebarCollapsed(true)}
-                  className="absolute top-20 right-[370px] p-1 bg-neutral-700 rounded-l-lg text-neutral-400 hover:text-white z-10"
-                >
-                  <ChevronRight className="w-4 h-4 rotate-180" />
-                </button>
-
                 {/* Search */}
                 <div>
                   <label className="text-sm font-medium text-neutral-300 mb-2 block">Hledat místo</label>
@@ -1975,13 +1958,17 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                   </div>
                   <input
                     type="range"
-                    min={17}
+                    min={13}
                     max={21}
                     value={tileZoom}
                     onChange={e => setTileZoom(parseInt(e.target.value))}
                     className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-white"
                   />
                   <div className="flex justify-between text-xs text-neutral-500 mt-1">
+                    <span>13</span>
+                    <span>14</span>
+                    <span>15</span>
+                    <span>16</span>
                     <span>17</span>
                     <span>18</span>
                     <span>19</span>
@@ -1989,7 +1976,7 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                     <span>21</span>
                   </div>
                   <button
-                    onClick={() => setTileZoom(Math.min(21, Math.max(17, currentMapZoom)))}
+                    onClick={() => setTileZoom(Math.min(21, Math.max(13, currentMapZoom)))}
                     className="text-xs text-white hover:text-neutral-300 mt-2"
                   >
                     Použít aktuální zoom mapy ({currentMapZoom})
@@ -2051,66 +2038,27 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                   )}
                 </div>
 
-                {/* Format selection */}
+                {/* Collapsible Details */}
                 <div>
-                  <label className="text-sm font-medium text-neutral-300 mb-2 block">Formát</label>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setImageFormat('png')}
-                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                        imageFormat === 'png'
-                          ? 'bg-white text-neutral-900'
-                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
-                      }`}
-                    >
-                      <FileImage className="w-4 h-4" />
-                      PNG
-                    </button>
-                    <button
-                      onClick={() => setImageFormat('jpg')}
-                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                        imageFormat === 'jpg'
-                          ? 'bg-white text-neutral-900'
-                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
-                      }`}
-                    >
-                      <FileImage className="w-4 h-4" />
-                      JPG
-                    </button>
-                  </div>
-
-                  {imageFormat === 'jpg' && (
-                    <div className="mt-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs text-neutral-500">Kvalita</label>
-                        <span className="text-xs font-mono text-white">{jpgQuality}%</span>
+                  <button
+                    onClick={() => setShowDetails(!showDetails)}
+                    className="flex items-center gap-2 text-sm text-neutral-400 hover:text-white transition-colors"
+                  >
+                    <ChevronRight className={`w-4 h-4 transition-transform ${showDetails ? 'rotate-90' : ''}`} />
+                    Detail
+                  </button>
+                  {showDetails && (
+                    <div className="mt-3 bg-neutral-700/50 rounded-lg p-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-neutral-400">Rozlišení:</span>
+                        <span className="font-mono text-white">{outputDimensions.width} × {outputDimensions.height} px</span>
                       </div>
-                      <input
-                        type="range"
-                        min={10}
-                        max={100}
-                        value={jpgQuality}
-                        onChange={e => setJpgQuality(parseInt(e.target.value))}
-                        className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-white"
-                      />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-neutral-400">Tiles:</span>
+                        <span className="font-mono text-white">{gridSize * gridSize}</span>
+                      </div>
                     </div>
                   )}
-                </div>
-
-                {/* Info section */}
-                <div className="bg-neutral-700/50 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-neutral-400">Rozlišení:</span>
-                    <span className="font-mono text-white">{outputDimensions.width} × {outputDimensions.height} px</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-neutral-400">Tiles:</span>
-                    <span className="font-mono text-white">{gridSize * gridSize}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-neutral-400">Odhad velikosti:</span>
-                    <span className="font-mono text-white">~{estimatedSize.toFixed(1)} MB</span>
-                  </div>
                 </div>
 
                 {/* Download button */}
@@ -2132,10 +2080,13 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                     <button
                       onClick={handleDownload}
                       disabled={!center}
-                      className="w-full py-3.5 bg-white text-neutral-900 text-sm font-semibold rounded-lg hover:bg-neutral-200 disabled:bg-neutral-700 disabled:text-neutral-500 flex items-center justify-center gap-2 transition-colors"
+                      className="w-full py-3.5 bg-white text-neutral-900 text-sm font-semibold rounded-lg hover:bg-neutral-200 disabled:bg-neutral-700 disabled:text-neutral-500 flex flex-col items-center justify-center gap-1 transition-colors"
                     >
-                      <Download className="w-5 h-5" />
-                      Stáhnout {imageFormat.toUpperCase()}
+                      <span className="flex items-center gap-2">
+                        <Download className="w-5 h-5" />
+                        Stáhnout JPG
+                      </span>
+                      <span className="text-xs font-normal opacity-70">~{estimatedSize.toFixed(1)} MB</span>
                     </button>
                   )}
                   {!center && (
@@ -2145,7 +2096,6 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                   )}
                 </div>
               </div>
-            )}
           </div>
         </div>
       </div>
