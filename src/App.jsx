@@ -129,29 +129,6 @@ const formatDistance = (meters) => {
   return `${Math.round(meters)} m`;
 };
 
-// Generate World File content (.jgw for JPG, .pgw for PNG)
-const generateWorldFile = (bounds, pixelWidth, pixelHeight) => {
-  const [[lat1, lon1], [lat2, lon2]] = bounds;
-  const pixelSizeX = (lon2 - lon1) / pixelWidth;
-  const pixelSizeY = (lat1 - lat2) / pixelHeight; // Negative because Y increases downward
-  const topLeftX = lon1;
-  const topLeftY = lat1;
-
-  // World file format: 6 lines
-  // Line 1: pixel size in x direction
-  // Line 2: rotation about y axis (usually 0)
-  // Line 3: rotation about x axis (usually 0)
-  // Line 4: pixel size in y direction (negative)
-  // Line 5: x coordinate of center of upper left pixel
-  // Line 6: y coordinate of center of upper left pixel
-  return `${pixelSizeX.toFixed(12)}
-0.0
-0.0
-${pixelSizeY.toFixed(12)}
-${(topLeftX + pixelSizeX / 2).toFixed(12)}
-${(topLeftY + pixelSizeY / 2).toFixed(12)}`;
-};
-
 // Estimate file size in MB
 const estimateFileSize = (width, height, format, quality) => {
   const pixels = width * height;
@@ -368,7 +345,8 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
 
   const [selectedSource, setSelectedSource] = useState(getValidSource);
   const [center, setCenter] = useState(savedSettings?.center || null);
-  const [mapView, setMapView] = useState(savedSettings?.mapView || [50.0755, 14.4378]);
+  // If center exists, use it as initial mapView so the viewport shows the selected point
+  const [mapView, setMapView] = useState(savedSettings?.center || savedSettings?.mapView || [50.0755, 14.4378]);
   const [mapZoom, setMapZoom] = useState(savedSettings?.mapZoom || 14);
   const [tileZoom, setTileZoom] = useState(savedSettings?.tileZoom || 18);
   const [gridSize, setGridSize] = useState(savedSettings?.gridSize || 7);
@@ -383,7 +361,6 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
   // New state for enhanced features
   const [imageFormat, setImageFormat] = useState(savedSettings?.imageFormat || 'png');
   const [jpgQuality, setJpgQuality] = useState(savedSettings?.jpgQuality || 85);
-  const [generateWorldFileFlag, setGenerateWorldFileFlag] = useState(savedSettings?.generateWorldFile || false);
   const [useCustomSize, setUseCustomSize] = useState(false);
   const [customWidth, setCustomWidth] = useState(2048);
   const [customHeight, setCustomHeight] = useState(2048);
@@ -406,10 +383,9 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
       gridSize,
       imageFormat,
       jpgQuality,
-      generateWorldFile: generateWorldFileFlag,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize, imageFormat, jpgQuality, generateWorldFileFlag]);
+  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize, imageFormat, jpgQuality]);
 
   // Calculate actual output dimensions
   const outputDimensions = useMemo(() => {
@@ -587,9 +563,6 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
       const lonStr = center[1].toFixed(3).replace('.', '_');
       const baseFilename = `ortho_${latStr}_${lonStr}_z${tileZoom}_${dateStr}`;
 
-      // Get bounds for world file
-      const bounds = getTileBounds(center, tileZoom, gridSize);
-
       // Export image
       const mimeType = imageFormat === 'jpg' ? 'image/jpeg' : 'image/png';
       const quality = imageFormat === 'jpg' ? jpgQuality / 100 : undefined;
@@ -601,21 +574,6 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
         link.href = url;
         link.click();
         URL.revokeObjectURL(url);
-
-        // Generate World File if requested
-        if (generateWorldFileFlag && bounds) {
-          const worldFileContent = generateWorldFile(bounds, totalSize, totalSize);
-          const worldFileExt = imageFormat === 'jpg' ? 'jgw' : 'pgw';
-          const worldBlob = new Blob([worldFileContent], { type: 'text/plain' });
-          const worldUrl = URL.createObjectURL(worldBlob);
-          const worldLink = document.createElement('a');
-          worldLink.download = `${baseFilename}.${worldFileExt}`;
-          worldLink.href = worldUrl;
-          setTimeout(() => {
-            worldLink.click();
-            URL.revokeObjectURL(worldUrl);
-          }, 100);
-        }
 
         setDownloading(false);
         setDownloadProgress(0);
