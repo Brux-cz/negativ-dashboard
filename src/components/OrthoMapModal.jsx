@@ -1,13 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Rectangle, Marker, Popup } from 'react-leaflet';
-import { Map, X, Download, MapPin, ChevronRight, FileImage } from 'lucide-react';
+import { Map, X, Download, MapPin, ChevronDown } from 'lucide-react';
 
 import { MapClickHandler, MapViewController, DarkOverlay, DimensionLabels, centerIcon } from './MapComponents';
 import {
   deg2tile,
-  tile2deg,
   getTileBounds,
-  generateWorldFile,
   estimateFileSize,
   orthoSources,
   ORTHO_STORAGE_KEY
@@ -52,13 +50,10 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
   const [searching, setSearching] = useState(false);
 
   // New state for enhanced features
-  const [imageFormat, setImageFormat] = useState(savedSettings?.imageFormat || 'png');
-  const [jpgQuality, setJpgQuality] = useState(savedSettings?.jpgQuality || 85);
-  const [generateWorldFileFlag, setGenerateWorldFileFlag] = useState(savedSettings?.generateWorldFile || false);
   const [useCustomSize, setUseCustomSize] = useState(false);
   const [customWidth, setCustomWidth] = useState(2048);
   const [customHeight, setCustomHeight] = useState(2048);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const modalRef = useRef(null);
   const mapContainerRef = useRef(null);
 
@@ -75,12 +70,9 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
       mapZoom,
       tileZoom,
       gridSize,
-      imageFormat,
-      jpgQuality,
-      generateWorldFile: generateWorldFileFlag,
     };
     localStorage.setItem(ORTHO_STORAGE_KEY, JSON.stringify(settings));
-  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize, imageFormat, jpgQuality, generateWorldFileFlag]);
+  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize]);
 
   // Calculate actual output dimensions
   const outputDimensions = useMemo(() => {
@@ -91,10 +83,10 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
     return { width: pixels, height: pixels };
   }, [useCustomSize, customWidth, customHeight, gridSize]);
 
-  // Estimate file size
+  // Estimate file size (always JPG 85%)
   const estimatedSize = useMemo(() => {
-    return estimateFileSize(outputDimensions.width, outputDimensions.height, imageFormat, jpgQuality);
-  }, [outputDimensions, imageFormat, jpgQuality]);
+    return estimateFileSize(outputDimensions.width, outputDimensions.height, 'jpg', 85);
+  }, [outputDimensions]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -110,7 +102,7 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
           setTileZoom(z => Math.min(21, z + 1));
           break;
         case '-':
-          setTileZoom(z => Math.max(17, z - 1));
+          setTileZoom(z => Math.max(13, z - 1));
           break;
         case 'Enter':
           if (center && !downloading) {
@@ -137,13 +129,6 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
     { value: 41, pixels: 10496, label: '10496 px' },
   ];
 
-  const tileZooms = [
-    { value: 17, label: '17' },
-    { value: 18, label: '18' },
-    { value: 19, label: '19' },
-    { value: 20, label: '20' },
-    { value: 21, label: '21' },
-  ];
 
   const handleMapClick = useCallback((latlng) => {
     setCenter(latlng);
@@ -258,39 +243,18 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
       const lonStr = center[1].toFixed(3).replace('.', '_');
       const baseFilename = `ortho_${latStr}_${lonStr}_z${tileZoom}_${dateStr}`;
 
-      // Get bounds for world file
-      const bounds = getTileBounds(center, tileZoom, gridSize);
-
-      // Export image
-      const mimeType = imageFormat === 'jpg' ? 'image/jpeg' : 'image/png';
-      const quality = imageFormat === 'jpg' ? jpgQuality / 100 : undefined;
-
+      // Export as JPG 85%
       canvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.download = `${baseFilename}.${imageFormat}`;
+        link.download = `${baseFilename}.jpg`;
         link.href = url;
         link.click();
         URL.revokeObjectURL(url);
 
-        // Generate World File if requested
-        if (generateWorldFileFlag && bounds) {
-          const worldFileContent = generateWorldFile(bounds, totalSize, totalSize);
-          const worldFileExt = imageFormat === 'jpg' ? 'jgw' : 'pgw';
-          const worldBlob = new Blob([worldFileContent], { type: 'text/plain' });
-          const worldUrl = URL.createObjectURL(worldBlob);
-          const worldLink = document.createElement('a');
-          worldLink.download = `${baseFilename}.${worldFileExt}`;
-          worldLink.href = worldUrl;
-          setTimeout(() => {
-            worldLink.click();
-            URL.revokeObjectURL(worldUrl);
-          }, 100);
-        }
-
         setDownloading(false);
         setDownloadProgress(0);
-      }, mimeType, quality);
+      }, 'image/jpeg', 0.85);
 
     } catch (error) {
       console.error('Download failed:', error);
@@ -1542,24 +1506,8 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
           </div>
 
           {/* Sidebar - Dark Mode */}
-          <div className={`${sidebarCollapsed ? 'w-12' : 'w-96'} bg-neutral-800 border-l border-neutral-700 overflow-y-auto shrink-0 transition-all duration-300`}>
-            {sidebarCollapsed ? (
-              <button
-                onClick={() => setSidebarCollapsed(false)}
-                className="w-full h-full flex items-center justify-center text-neutral-400 hover:text-white"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            ) : (
+          <div className="w-96 bg-neutral-800 border-l border-neutral-700 overflow-y-auto shrink-0">
               <div className="p-5 space-y-6">
-                {/* Collapse button */}
-                <button
-                  onClick={() => setSidebarCollapsed(true)}
-                  className="absolute top-20 right-[370px] p-1 bg-neutral-700 rounded-l-lg text-neutral-400 hover:text-white z-10"
-                >
-                  <ChevronRight className="w-4 h-4 rotate-180" />
-                </button>
-
                 {/* Search */}
                 <div>
                   <label className="text-sm font-medium text-neutral-300 mb-2 block">Hledat místo</label>
@@ -1628,21 +1576,21 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                   </div>
                   <input
                     type="range"
-                    min={17}
+                    min={13}
                     max={21}
                     value={tileZoom}
                     onChange={e => setTileZoom(parseInt(e.target.value))}
                     className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-white"
                   />
                   <div className="flex justify-between text-xs text-neutral-500 mt-1">
+                    <span>13</span>
+                    <span>15</span>
                     <span>17</span>
-                    <span>18</span>
                     <span>19</span>
-                    <span>20</span>
                     <span>21</span>
                   </div>
                   <button
-                    onClick={() => setTileZoom(Math.min(21, Math.max(17, currentMapZoom)))}
+                    onClick={() => setTileZoom(Math.min(21, Math.max(13, currentMapZoom)))}
                     className="text-xs text-white hover:text-neutral-300 mt-2"
                   >
                     Použít aktuální zoom mapy ({currentMapZoom})
@@ -1704,66 +1652,35 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                   )}
                 </div>
 
-                {/* Format selection */}
+                {/* Details - Collapsible */}
                 <div>
-                  <label className="text-sm font-medium text-neutral-300 mb-2 block">Formát</label>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setImageFormat('png')}
-                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                        imageFormat === 'png'
-                          ? 'bg-white text-neutral-900'
-                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
-                      }`}
-                    >
-                      <FileImage className="w-4 h-4" />
-                      PNG
-                    </button>
-                    <button
-                      onClick={() => setImageFormat('jpg')}
-                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                        imageFormat === 'jpg'
-                          ? 'bg-white text-neutral-900'
-                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
-                      }`}
-                    >
-                      <FileImage className="w-4 h-4" />
-                      JPG
-                    </button>
-                  </div>
-
-                  {imageFormat === 'jpg' && (
-                    <div className="mt-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs text-neutral-500">Kvalita</label>
-                        <span className="text-xs font-mono text-white">{jpgQuality}%</span>
+                  <button
+                    onClick={() => setShowDetails(!showDetails)}
+                    className="w-full flex items-center justify-between text-sm font-medium text-neutral-300 hover:text-white transition-colors"
+                  >
+                    <span>Detaily</span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showDetails ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showDetails && (
+                    <div className="mt-3 bg-neutral-700/50 rounded-lg p-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-neutral-400">Rozlišení:</span>
+                        <span className="font-mono text-white">{outputDimensions.width} × {outputDimensions.height} px</span>
                       </div>
-                      <input
-                        type="range"
-                        min={10}
-                        max={100}
-                        value={jpgQuality}
-                        onChange={e => setJpgQuality(parseInt(e.target.value))}
-                        className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-white"
-                      />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-neutral-400">Tiles:</span>
+                        <span className="font-mono text-white">{gridSize * gridSize}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-neutral-400">Odhad velikosti:</span>
+                        <span className="font-mono text-white">~{estimatedSize.toFixed(1)} MB</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-neutral-400">Formát:</span>
+                        <span className="font-mono text-white">JPG 85%</span>
+                      </div>
                     </div>
                   )}
-                </div>
-
-                {/* Info section */}
-                <div className="bg-neutral-700/50 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-neutral-400">Rozlišení:</span>
-                    <span className="font-mono text-white">{outputDimensions.width} × {outputDimensions.height} px</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-neutral-400">Tiles:</span>
-                    <span className="font-mono text-white">{gridSize * gridSize}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-neutral-400">Odhad velikosti:</span>
-                    <span className="font-mono text-white">~{estimatedSize.toFixed(1)} MB</span>
-                  </div>
                 </div>
 
                 {/* Download button */}
@@ -1788,7 +1705,7 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                       className="w-full py-3.5 bg-white text-neutral-900 text-sm font-semibold rounded-lg hover:bg-neutral-200 disabled:bg-neutral-700 disabled:text-neutral-500 flex items-center justify-center gap-2 transition-colors"
                     >
                       <Download className="w-5 h-5" />
-                      Stáhnout {imageFormat.toUpperCase()}
+                      Stáhnout JPG
                     </button>
                   )}
                   {!center && (
@@ -1798,7 +1715,6 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                   )}
                 </div>
               </div>
-            )}
           </div>
         </div>
       </div>
