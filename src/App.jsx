@@ -628,6 +628,14 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     }
   };
 
+  // Maze state
+  const [mazeCompleted, setMazeCompleted] = useState(false);
+  const [mazeCrashed, setMazeCrashed] = useState(false);
+  const [mazeStarted, setMazeStarted] = useState(false);
+  const [showBigH, setShowBigH] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const mazeRef = useRef(null);
+
   // Easter egg quiz state
   const [quizQuestion, setQuizQuestion] = useState(null);
   const [isDrawing, setIsDrawing] = useState(true);
@@ -665,9 +673,120 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     { id: 10, question: "Jaké je Petrovo oblíbené jídlo?", answer: "křehká kachna" },
   ], []);
 
-  // Drawing animation effect
+  // Maze walls definition - array of {x, y, width, height}
+  const mazeWalls = useMemo(() => [
+    // Outer walls
+    { x: 0, y: 0, w: 100, h: 2 },      // top
+    { x: 0, y: 98, w: 100, h: 2 },     // bottom
+    { x: 0, y: 0, w: 2, h: 40 },       // left top
+    { x: 0, y: 60, w: 2, h: 40 },      // left bottom (gap in middle for start)
+    { x: 98, y: 0, w: 2, h: 40 },      // right top
+    { x: 98, y: 60, w: 2, h: 40 },     // right bottom (gap for finish)
+    // Inner maze walls - horizontal
+    { x: 10, y: 15, w: 25, h: 2 },
+    { x: 45, y: 15, w: 35, h: 2 },
+    { x: 20, y: 30, w: 40, h: 2 },
+    { x: 70, y: 30, w: 20, h: 2 },
+    { x: 10, y: 45, w: 30, h: 2 },
+    { x: 50, y: 45, w: 15, h: 2 },
+    { x: 75, y: 45, w: 15, h: 2 },
+    { x: 5, y: 60, w: 25, h: 2 },
+    { x: 40, y: 60, w: 25, h: 2 },
+    { x: 75, y: 60, w: 15, h: 2 },
+    { x: 15, y: 75, w: 35, h: 2 },
+    { x: 60, y: 75, w: 30, h: 2 },
+    { x: 25, y: 85, w: 50, h: 2 },
+    // Inner maze walls - vertical
+    { x: 20, y: 2, w: 2, h: 13 },
+    { x: 35, y: 17, w: 2, h: 13 },
+    { x: 55, y: 2, w: 2, h: 13 },
+    { x: 80, y: 17, w: 2, h: 13 },
+    { x: 10, y: 32, w: 2, h: 13 },
+    { x: 45, y: 32, w: 2, h: 13 },
+    { x: 65, y: 32, w: 2, h: 28 },
+    { x: 25, y: 47, w: 2, h: 13 },
+    { x: 85, y: 47, w: 2, h: 13 },
+    { x: 5, y: 62, w: 2, h: 13 },
+    { x: 35, y: 62, w: 2, h: 13 },
+    { x: 50, y: 62, w: 2, h: 13 },
+    { x: 80, y: 62, w: 2, h: 13 },
+    { x: 15, y: 77, w: 2, h: 8 },
+    { x: 45, y: 77, w: 2, h: 8 },
+    { x: 70, y: 77, w: 2, h: 8 },
+  ], []);
+
+  // Check if point is inside any wall
+  const isOnWall = useCallback((x, y) => {
+    // Convert screen coordinates to percentage
+    if (!mazeRef.current) return false;
+    const rect = mazeRef.current.getBoundingClientRect();
+    const px = ((x - rect.left) / rect.width) * 100;
+    const py = ((y - rect.top) / rect.height) * 100;
+
+    // Check each wall
+    for (const wall of mazeWalls) {
+      if (px >= wall.x && px <= wall.x + wall.w &&
+          py >= wall.y && py <= wall.y + wall.h) {
+        return true;
+      }
+    }
+    return false;
+  }, [mazeWalls]);
+
+  // Check if reached finish
+  const isAtFinish = useCallback((x, y) => {
+    if (!mazeRef.current) return false;
+    const rect = mazeRef.current.getBoundingClientRect();
+    const px = ((x - rect.left) / rect.width) * 100;
+    const py = ((y - rect.top) / rect.height) * 100;
+    // Finish zone is on the right side gap (98-100%, 40-60%)
+    return px >= 96 && py >= 40 && py <= 60;
+  }, []);
+
+  // Handle maze mouse move
+  const handleMazeMove = useCallback((e) => {
+    if (!mazeStarted || mazeCrashed || mazeCompleted) return;
+
+    const x = e.clientX;
+    const y = e.clientY;
+    setMousePos({ x, y });
+
+    if (isOnWall(x, y)) {
+      // Crashed!
+      setMazeCrashed(true);
+      setTimeout(() => {
+        setShowBigH(true);
+      }, 500);
+      setTimeout(() => {
+        // Reset maze
+        setMazeCrashed(false);
+        setShowBigH(false);
+        setMazeStarted(false);
+      }, 3000);
+    } else if (isAtFinish(x, y)) {
+      // Completed!
+      setMazeCompleted(true);
+    }
+  }, [mazeStarted, mazeCrashed, mazeCompleted, isOnWall, isAtFinish]);
+
+  // Start maze when entering start zone
+  const handleMazeStart = useCallback((e) => {
+    if (mazeStarted || mazeCrashed || mazeCompleted) return;
+
+    if (!mazeRef.current) return;
+    const rect = mazeRef.current.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * 100;
+    const py = ((e.clientY - rect.top) / rect.height) * 100;
+
+    // Start zone is on the left side gap (0-4%, 40-60%)
+    if (px <= 4 && py >= 40 && py <= 60) {
+      setMazeStarted(true);
+    }
+  }, [mazeStarted, mazeCrashed, mazeCompleted]);
+
+  // Drawing animation effect - only after maze completed
   useEffect(() => {
-    if (!isOpen || isEasterEggDismissed) return;
+    if (!isOpen || isEasterEggDismissed || !mazeCompleted) return;
 
     if (isDrawing) {
       const interval = setInterval(() => {
@@ -686,7 +805,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
         clearTimeout(timeout);
       };
     }
-  }, [isOpen, isDrawing, isEasterEggDismissed, petrQuestions]);
+  }, [isOpen, isDrawing, isEasterEggDismissed, mazeCompleted, petrQuestions]);
 
   // Check answer
   const checkAnswer = () => {
@@ -849,6 +968,29 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               0%, 100% { transform: scale(1); filter: drop-shadow(0 0 20px #22c55e); }
               50% { transform: scale(1.15); filter: drop-shadow(0 0 40px #22c55e); }
             }
+            @keyframes crashShake {
+              0%, 100% { transform: translate(0, 0) rotate(0deg); }
+              10% { transform: translate(-20px, -10px) rotate(-5deg); }
+              20% { transform: translate(20px, 10px) rotate(5deg); }
+              30% { transform: translate(-15px, 5px) rotate(-3deg); }
+              40% { transform: translate(15px, -5px) rotate(3deg); }
+              50% { transform: translate(-10px, 10px) rotate(-2deg); }
+              60% { transform: translate(10px, -10px) rotate(2deg); }
+              70% { transform: translate(-5px, 5px) rotate(-1deg); }
+              80% { transform: translate(5px, -5px) rotate(1deg); }
+              90% { transform: translate(-2px, 2px) rotate(0deg); }
+            }
+            @keyframes bigHGrow {
+              0% { transform: scale(0.1); opacity: 0; }
+              50% { transform: scale(1.2); opacity: 1; }
+              100% { transform: scale(1); opacity: 1; }
+            }
+            @keyframes glitchText {
+              0%, 100% { text-shadow: 2px 0 #ff00ff, -2px 0 #00ffff; }
+              25% { text-shadow: -2px 0 #ff00ff, 2px 0 #00ffff; }
+              50% { text-shadow: 2px 2px #ff00ff, -2px -2px #00ffff; }
+              75% { text-shadow: -2px 2px #ff00ff, 2px -2px #00ffff; }
+            }
           `}</style>
 
           {/* PETR SVETR floating everywhere */}
@@ -873,7 +1015,138 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
             </div>
           ))}
 
-          {/* Main content */}
+          {/* Maze phase */}
+          {!mazeCompleted && (
+            <div
+              ref={mazeRef}
+              className="fixed inset-0 z-20"
+              onMouseMove={(e) => { handleMazeStart(e); handleMazeMove(e); }}
+              style={{
+                cursor: mazeStarted ? 'none' : 'default',
+                animation: mazeCrashed ? 'crashShake 0.5s ease-in-out' : 'none',
+              }}
+            >
+              {/* Maze walls */}
+              <svg
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                }}
+              >
+                {mazeWalls.map((wall, i) => (
+                  <rect
+                    key={i}
+                    x={wall.x}
+                    y={wall.y}
+                    width={wall.w}
+                    height={wall.h}
+                    fill="white"
+                  />
+                ))}
+                {/* Start zone indicator */}
+                <rect x="0" y="40" width="4" height="20" fill="#00ff00" opacity="0.5" />
+                <text x="2" y="52" fontSize="3" fill="#00ff00" textAnchor="middle" fontFamily="Comic Sans MS">START</text>
+                {/* Finish zone indicator */}
+                <rect x="96" y="40" width="4" height="20" fill="#ff00ff" opacity="0.5" />
+                <text x="98" y="52" fontSize="3" fill="#ff00ff" textAnchor="middle" fontFamily="Comic Sans MS">CÍL</text>
+              </svg>
+
+              {/* Mouse cursor when playing */}
+              {mazeStarted && !mazeCrashed && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    left: mousePos.x - 8,
+                    top: mousePos.y - 8,
+                    width: 16,
+                    height: 16,
+                    background: '#ffff00',
+                    borderRadius: '50%',
+                    border: '2px solid #000',
+                    pointerEvents: 'none',
+                    zIndex: 100,
+                    boxShadow: '0 0 10px #ffff00',
+                  }}
+                />
+              )}
+
+              {/* Instructions */}
+              {!mazeStarted && !mazeCrashed && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    textAlign: 'center',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <div style={{
+                    fontFamily: '"Comic Sans MS", cursive',
+                    fontSize: '48px',
+                    color: '#fff',
+                    textShadow: '3px 3px 6px #000',
+                    marginBottom: '20px',
+                  }}>
+                    BLUDIŠTĚ
+                  </div>
+                  <div style={{
+                    fontFamily: '"Comic Sans MS", cursive',
+                    fontSize: '24px',
+                    color: '#ffff00',
+                    textShadow: '2px 2px 4px #000',
+                  }}>
+                    Najeď myší na START a projdi do CÍLE
+                  </div>
+                  <div style={{
+                    fontFamily: '"Comic Sans MS", cursive',
+                    fontSize: '18px',
+                    color: '#ff0000',
+                    textShadow: '2px 2px 4px #000',
+                    marginTop: '10px',
+                  }}>
+                    NEDOTÝKEJ SE STĚN!
+                  </div>
+                </div>
+              )}
+
+              {/* Big H on crash */}
+              {showBigH && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.8)',
+                    zIndex: 200,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: '"Comic Sans MS", cursive',
+                      fontSize: '80vw',
+                      fontWeight: 'bold',
+                      color: '#ff0000',
+                      animation: 'bigHGrow 1s ease-out forwards, glitchText 0.1s infinite',
+                      textShadow: '0 0 50px #ff0000',
+                    }}
+                  >
+                    H
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Main content - only show after maze completed */}
+          {mazeCompleted && (
           <div className="text-center relative z-10">
             {/* Game won */}
             {gameWon ? (
@@ -1254,6 +1527,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               </>
             )}
           </div>
+          )}
         </div>
       )}
       <div className="bg-neutral-900 rounded-lg w-full h-full shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
