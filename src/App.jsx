@@ -393,11 +393,11 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 <Rectangle
                   bounds={cropBounds}
                   pathOptions={{
-                    color: '#171717',
-                    weight: 2,
-                    fillColor: '#171717',
-                    fillOpacity: 0.05,
-                    dashArray: '8, 4'
+                    color: '#ef4444',
+                    weight: 3,
+                    fillColor: '#ef4444',
+                    fillOpacity: 0.1,
+                    dashArray: '10, 6'
                   }}
                 />
               )}
