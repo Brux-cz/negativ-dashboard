@@ -73,18 +73,6 @@ const ToolCard = ({ tool, onClick }) => {
 const orthoSources = [
   { id: 'google', name: 'Google', url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', tileUrl: (z, x, y) => `https://mt1.google.com/vt/lyrs=s&x=${x}&y=${y}&z=${z}` },
   { id: 'esri', name: 'Esri', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', tileUrl: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}` },
-  { id: 'bing', name: 'Bing', url: 'https://ecn.t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1', tileUrl: (z, x, y) => {
-    // Bing uses quadkey system
-    let quadkey = '';
-    for (let i = z; i > 0; i--) {
-      let digit = 0;
-      const mask = 1 << (i - 1);
-      if ((x & mask) !== 0) digit += 1;
-      if ((y & mask) !== 0) digit += 2;
-      quadkey += digit;
-    }
-    return `https://ecn.t0.tiles.virtualearth.net/tiles/a${quadkey}.jpeg?g=1`;
-  }},
 ];
 
 // Custom marker icon
