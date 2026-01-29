@@ -71,7 +71,20 @@ const ToolCard = ({ tool, onClick }) => {
 
 // Ortho Map Sources - tile URL patterns
 const orthoSources = [
-  { id: 'google', name: 'Google Satellite', url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', tileUrl: (z, x, y) => `https://mt1.google.com/vt/lyrs=s&x=${x}&y=${y}&z=${z}` },
+  { id: 'google', name: 'Google', url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', tileUrl: (z, x, y) => `https://mt1.google.com/vt/lyrs=s&x=${x}&y=${y}&z=${z}` },
+  { id: 'esri', name: 'Esri', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', tileUrl: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}` },
+  { id: 'bing', name: 'Bing', url: 'https://ecn.t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1', tileUrl: (z, x, y) => {
+    // Bing uses quadkey system
+    let quadkey = '';
+    for (let i = z; i > 0; i--) {
+      let digit = 0;
+      const mask = 1 << (i - 1);
+      if ((x & mask) !== 0) digit += 1;
+      if ((y & mask) !== 0) digit += 2;
+      quadkey += digit;
+    }
+    return `https://ecn.t0.tiles.virtualearth.net/tiles/a${quadkey}.jpeg?g=1`;
+  }},
 ];
 
 // Custom marker icon
@@ -156,7 +169,9 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
 
   const savedSettings = loadSettings();
 
-  const [selectedSource] = useState(orthoSources[0]);
+  const [selectedSource, setSelectedSource] = useState(() =>
+    orthoSources.find(s => s.id === savedSettings?.sourceId) || orthoSources[0]
+  );
   const [center, setCenter] = useState(savedSettings?.center || null);
   const [mapView, setMapView] = useState(savedSettings?.mapView || [50.0755, 14.4378]);
   const [mapZoom, setMapZoom] = useState(savedSettings?.mapZoom || 14);
@@ -177,6 +192,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   // Save settings to localStorage
   useEffect(() => {
     const settings = {
+      sourceId: selectedSource.id,
       center,
       mapView,
       mapZoom,
@@ -184,7 +200,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
       gridSize,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [center, mapView, mapZoom, tileZoom, gridSize]);
+  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize]);
 
   // Pixel sizes
   const pixelSizes = [
@@ -447,6 +463,26 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Map Source */}
+            <div className="mb-6">
+              <label className="text-sm font-medium text-neutral-700 mb-2 block">Zdroj mapy</label>
+              <div className="flex gap-1">
+                {orthoSources.map(source => (
+                  <button
+                    key={source.id}
+                    onClick={() => setSelectedSource(source)}
+                    className={`flex-1 py-2 rounded-sm border text-sm font-medium transition-all ${
+                      selectedSource.id === source.id
+                        ? 'border-neutral-900 bg-neutral-900 text-white'
+                        : 'border-neutral-200 hover:border-neutral-400'
+                    }`}
+                  >
+                    {source.name}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Tile Zoom */}
