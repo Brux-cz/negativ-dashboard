@@ -32,6 +32,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_EASTER_EGG_ENABLED: ${{ vars.EASTER_EGG_ENABLED }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
