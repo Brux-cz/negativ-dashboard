@@ -666,8 +666,8 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     { id: 3, question: "Který den v měsíci má Petr narozeniny?", answer: "31", hint: "Poslední den v měsíci který má 31 dní" },
     { id: 4, question: "Jak se jmenuje Petrova babička?", answer: "svatava", hint: "Staročeské jméno, zní trochu svatě" },
     { id: 5, question: "Jaký je Petrův oblíbený seriál?", answer: "supernatural", hint: "Dva bratři loví démony a příšery, 15 sérií" },
-    { id: 6, question: "Máte Petra rádi?", answer: "ano", hint: "Opak slova 'ne', pozitivní odpověď" },
-    { id: 7, question: "Ve které vesnici Petr bydlel?", answer: "hodkovice", hint: "Vesnice pod Jizerskými horami, blízko Liberce" },
+    { id: 6, question: "Máte Petra rádi?", answer: "ano", hint: null },
+    { id: 7, question: "Ve které vesnici Petr bydlel?", answer: "hodkovice", hint: "TRAP" },
     { id: 8, question: "Jaká je Petrova oblíbená barva?", answer: "zelená", hint: "Barva trávy, lesa a přírody" },
     { id: 9, question: "Kolik má Petr sourozenců?", answer: "2", hint: "Více než jeden, méně než tři" },
     { id: 10, question: "Jaké je Petrovo oblíbené jídlo?", answer: "křehká kachna", hint: "Pečené vodní ptáče, servírované křupavé" },
@@ -1527,86 +1527,99 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       Odpověz správně a odhalíš tajemství... 🌟
                     </div>
 
-                    {/* Hint button - fixed on right side */}
-                    <div
-                      style={{
-                        position: 'fixed',
-                        right: '20px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        zIndex: 100,
-                      }}
-                    >
-                      {!showHint ? (
-                        <button
-                          onClick={() => setShowHint(true)}
-                          style={{
-                            fontFamily: 'Georgia, serif',
-                            fontStyle: 'italic',
-                            fontSize: '18px',
-                            color: 'rgba(255,255,255,0.4)',
-                            background: 'transparent',
-                            border: 'none',
-                            cursor: 'pointer',
-                            writingMode: 'vertical-rl',
-                            textOrientation: 'mixed',
-                            padding: '20px 10px',
-                            transition: 'all 0.3s ease',
-                          }}
-                          onMouseOver={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
-                          onMouseOut={e => e.target.style.color = 'rgba(255,255,255,0.4)'}
-                        >
-                          nápověda
-                        </button>
-                      ) : (
-                        <div
-                          style={{
-                            background: 'rgba(0,0,0,0.9)',
-                            border: '3px solid #ffff00',
-                            borderRadius: '12px',
-                            padding: '20px',
-                            maxWidth: '250px',
-                            boxShadow: '0 0 30px rgba(255,255,0,0.3)',
-                          }}
-                        >
-                          <div style={{
-                            fontFamily: 'Georgia, serif',
-                            fontStyle: 'italic',
-                            fontSize: '12px',
-                            color: '#ffff00',
-                            marginBottom: '10px',
-                            textTransform: 'uppercase',
-                            letterSpacing: '2px',
-                          }}>
-                            Nápověda
-                          </div>
-                          <div style={{
-                            fontFamily: '"Comic Sans MS", cursive',
-                            fontSize: '16px',
-                            color: '#fff',
-                            lineHeight: '1.5',
-                          }}>
-                            {quizQuestion.hint}
-                          </div>
+                    {/* Hint button - fixed on right side (only if hint exists) */}
+                    {quizQuestion.hint && (
+                      <div
+                        style={{
+                          position: 'fixed',
+                          right: '20px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          zIndex: 100,
+                        }}
+                      >
+                        {!showHint ? (
                           <button
-                            onClick={() => setShowHint(false)}
+                            onClick={() => {
+                              if (quizQuestion.hint === 'TRAP') {
+                                // Send back to maze!
+                                setMazeCompleted(false);
+                                setMazeStarted(false);
+                                setIsDrawing(true);
+                                setQuizQuestion(null);
+                                setQuizAnswer('');
+                              } else {
+                                setShowHint(true);
+                              }
+                            }}
                             style={{
-                              marginTop: '15px',
-                              fontFamily: '"Comic Sans MS", cursive',
-                              fontSize: '12px',
-                              color: '#888',
+                              fontFamily: 'Georgia, serif',
+                              fontStyle: 'italic',
+                              fontSize: '18px',
+                              color: 'rgba(255,255,255,0.4)',
                               background: 'transparent',
-                              border: '1px solid #444',
-                              borderRadius: '4px',
-                              padding: '5px 10px',
+                              border: 'none',
                               cursor: 'pointer',
+                              writingMode: 'vertical-rl',
+                              textOrientation: 'mixed',
+                              padding: '20px 10px',
+                              transition: 'all 0.3s ease',
+                            }}
+                            onMouseOver={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
+                            onMouseOut={e => e.target.style.color = 'rgba(255,255,255,0.4)'}
+                          >
+                            nápověda
+                          </button>
+                        ) : (
+                          <div
+                            style={{
+                              background: 'rgba(0,0,0,0.9)',
+                              border: '3px solid #ffff00',
+                              borderRadius: '12px',
+                              padding: '20px',
+                              maxWidth: '250px',
+                              boxShadow: '0 0 30px rgba(255,255,0,0.3)',
                             }}
                           >
-                            Skrýt
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                            <div style={{
+                              fontFamily: 'Georgia, serif',
+                              fontStyle: 'italic',
+                              fontSize: '12px',
+                              color: '#ffff00',
+                              marginBottom: '10px',
+                              textTransform: 'uppercase',
+                              letterSpacing: '2px',
+                            }}>
+                              Nápověda
+                            </div>
+                            <div style={{
+                              fontFamily: '"Comic Sans MS", cursive',
+                              fontSize: '16px',
+                              color: '#fff',
+                              lineHeight: '1.5',
+                            }}>
+                              {quizQuestion.hint}
+                            </div>
+                            <button
+                              onClick={() => setShowHint(false)}
+                              style={{
+                                marginTop: '15px',
+                                fontFamily: '"Comic Sans MS", cursive',
+                                fontSize: '12px',
+                                color: '#888',
+                                background: 'transparent',
+                                border: '1px solid #444',
+                                borderRadius: '4px',
+                                padding: '5px 10px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Skrýt
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </>
