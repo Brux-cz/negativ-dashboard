@@ -315,8 +315,8 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   const areaInfo = getAreaInfo();
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2" onClick={onClose}>
-      <div className="bg-white rounded-sm w-full max-w-7xl shadow-2xl overflow-hidden h-[95vh] flex flex-col" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-sm w-full h-full shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-4 border-b border-neutral-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
@@ -341,7 +341,6 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
               center={mapView}
               zoom={mapZoom}
               className="h-full w-full"
-              style={{ minHeight: '700px' }}
             >
               <TileLayer
                 url={selectedSource.url}
