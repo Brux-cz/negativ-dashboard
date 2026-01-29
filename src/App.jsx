@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { Map, Mountain, Building2, Home, Layers, Sparkles, Camera, FolderOpen, ChevronRight, Settings, Download, Zap, Box, Check, X, Plus, Upload, RefreshCw, MapPin, Square, Crosshair, Lock, Unlock, FileImage, FileText, Keyboard } from 'lucide-react';
 import { MapContainer, TileLayer, useMap, useMapEvents, Rectangle, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -250,7 +251,8 @@ const DarkOverlay = ({ bounds }) => {
 };
 
 // Dimension labels component - shows real-world dimensions on crop edges
-const DimensionLabels = ({ bounds }) => {
+// Uses portal to render labels outside MapContainer while accessing map context
+const DimensionLabels = ({ bounds, portalContainer }) => {
   const map = useMap();
   const [dimensions, setDimensions] = useState(null);
 
@@ -288,9 +290,9 @@ const DimensionLabels = ({ bounds }) => {
     };
   }, [map, bounds]);
 
-  if (!dimensions) return null;
+  if (!dimensions || !portalContainer) return null;
 
-  return (
+  return ReactDOM.createPortal(
     <>
       {/* Top dimension (width) */}
       <div
@@ -300,6 +302,7 @@ const DimensionLabels = ({ bounds }) => {
           top: dimensions.topY,
           transform: 'translate(-50%, -100%)',
           zIndex: 600,
+          pointerEvents: 'none',
         }}
         className="bg-black/80 text-white text-xs font-mono px-2 py-1 rounded whitespace-nowrap"
       >
@@ -314,12 +317,14 @@ const DimensionLabels = ({ bounds }) => {
           transform: 'translate(-100%, -50%) rotate(-90deg)',
           transformOrigin: 'right center',
           zIndex: 600,
+          pointerEvents: 'none',
         }}
         className="bg-black/80 text-white text-xs font-mono px-2 py-1 rounded whitespace-nowrap"
       >
         {dimensions.height}
       </div>
-    </>
+    </>,
+    portalContainer
   );
 };
 
@@ -384,6 +389,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   const [customHeight, setCustomHeight] = useState(2048);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const modalRef = useRef(null);
+  const mapContainerRef = useRef(null);
 
   const handleZoomChange = useCallback((zoom) => {
     setCurrentMapZoom(Math.round(zoom));
@@ -648,7 +654,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
         {/* Content */}
         <div className="flex flex-1 overflow-hidden">
           {/* Map */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative" ref={mapContainerRef}>
             <MapContainer
               center={mapView}
               zoom={mapZoom}
@@ -683,10 +689,9 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                   }}
                 />
               )}
-            </MapContainer>
 
-            {/* Dimension labels */}
-            <DimensionLabels bounds={cropBounds} />
+              <DimensionLabels bounds={cropBounds} portalContainer={mapContainerRef.current} />
+            </MapContainer>
 
             {/* Zoom indicator */}
             <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-sm px-3 py-2 rounded-lg">
