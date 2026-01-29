@@ -642,6 +642,8 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
   const [drawingNumber, setDrawingNumber] = useState(1);
   const [quizAnswer, setQuizAnswer] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showWrong, setShowWrong] = useState(false);
+  const [wrongCount, setWrongCount] = useState(0);
 
   // Mini-game state
   const [showMiniGame, setShowMiniGame] = useState(false);
@@ -831,7 +833,9 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
 
   // Check answer
   const checkAnswer = () => {
-    if (quizQuestion && quizAnswer.toLowerCase().trim() === quizQuestion.answer) {
+    if (!quizQuestion || !quizAnswer.trim()) return;
+
+    if (quizAnswer.toLowerCase().trim() === quizQuestion.answer) {
       // Check if this is a trap question and hint was clicked
       if (quizQuestion.trapOnHint && hintWasClicked) {
         // They said "ano" after reading "Chceš zpátky do bludiště?" - back to maze!
@@ -842,14 +846,38 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
         setQuizAnswer('');
         setShowHint(false);
         setHintWasClicked(false);
+        setWrongCount(0);
       } else {
         // Normal correct answer
         setShowSuccess(true);
+        setWrongCount(0);
         setTimeout(() => {
           setShowSuccess(false);
           setShowMiniGame(true);
         }, 2000);
       }
+    } else {
+      // Wrong answer!
+      const newWrongCount = wrongCount + 1;
+      setWrongCount(newWrongCount);
+      setShowWrong(true);
+      setQuizAnswer('');
+
+      setTimeout(() => {
+        setShowWrong(false);
+
+        // After 3 wrong answers, back to maze!
+        if (newWrongCount >= 3) {
+          setMazeCompleted(false);
+          setMazeStarted(false);
+          setIsDrawing(true);
+          setQuizQuestion(null);
+          setQuizAnswer('');
+          setShowHint(false);
+          setHintWasClicked(false);
+          setWrongCount(0);
+        }
+      }, 1500);
     }
   };
 
@@ -1093,6 +1121,15 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
               0%, 100% { transform: scale(1); filter: drop-shadow(0 0 20px #22c55e); }
               50% { transform: scale(1.15); filter: drop-shadow(0 0 40px #22c55e); }
             }
+            @keyframes wrongShake {
+              0%, 100% { transform: translateX(0); }
+              10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+              20%, 40%, 60%, 80% { transform: translateX(10px); }
+            }
+            @keyframes wrongPulse {
+              0%, 100% { background-color: transparent; }
+              50% { background-color: rgba(255, 0, 0, 0.3); }
+            }
             @keyframes crashShake {
               0%, 100% { transform: translate(0, 0) rotate(0deg); }
               10% { transform: translate(-20px, -10px) rotate(-5deg); }
@@ -1272,7 +1309,7 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
 
           {/* Main content - only show after maze completed */}
           {mazeCompleted && (
-          <div className="text-center relative z-10">
+          <div className="text-center relative z-10" onClick={e => e.stopPropagation()}>
             {/* Game won */}
             {gameWon ? (
               <div style={{ animation: 'successPulse 0.5s ease infinite' }}>
@@ -1297,7 +1334,7 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                 </div>
               </div>
             ) : showMiniGame ? (
-              <div>
+              <div onClick={e => e.stopPropagation()}>
                 {!currentGame ? (
                   <>
                     {/* Lottery game selection */}
@@ -1554,6 +1591,28 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                   Připrav se na mini hru... 🎮
                 </div>
               </div>
+            ) : showWrong ? (
+              <div style={{ animation: 'wrongShake 0.5s ease' }}>
+                <div style={{ fontSize: '120px' }}>❌</div>
+                <div style={{
+                  fontFamily: '"Comic Sans MS", cursive',
+                  fontSize: '48px',
+                  color: '#ff0000',
+                  textShadow: '0 0 20px #ff0000',
+                  marginTop: '20px',
+                }}>
+                  ŠPATNĚ!
+                </div>
+                <div style={{
+                  fontFamily: '"Comic Sans MS", cursive',
+                  fontSize: '18px',
+                  color: '#ffff00',
+                  marginTop: '10px',
+                  textShadow: '1px 1px 2px #000',
+                }}>
+                  {wrongCount >= 3 ? '3x špatně... Zpátky do bludiště! 🔄' : `Zkus to znovu! (${wrongCount}/3)`}
+                </div>
+              </div>
             ) : (
               <>
                 {/* The Mysterious Eye */}
@@ -1686,10 +1745,10 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                       <div
                         style={{
                           position: 'fixed',
-                          right: '20px',
+                          right: '30px',
                           top: '50%',
                           transform: 'translateY(-50%)',
-                          zIndex: 100,
+                          zIndex: 10000,
                         }}
                       >
                         {!showHint ? (
@@ -1710,18 +1769,19 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                             style={{
                               fontFamily: 'Georgia, serif',
                               fontStyle: 'italic',
-                              fontSize: '18px',
-                              color: 'rgba(255,255,255,0.4)',
-                              background: 'transparent',
-                              border: 'none',
+                              fontSize: '20px',
+                              color: 'rgba(255,255,255,0.6)',
+                              background: 'rgba(0,0,0,0.3)',
+                              border: '2px solid rgba(255,255,255,0.3)',
+                              borderRadius: '8px',
                               cursor: 'pointer',
                               writingMode: 'vertical-rl',
                               textOrientation: 'mixed',
-                              padding: '20px 10px',
+                              padding: '20px 12px',
                               transition: 'all 0.3s ease',
                             }}
-                            onMouseOver={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
-                            onMouseOut={e => e.target.style.color = 'rgba(255,255,255,0.4)'}
+                            onMouseOver={e => { e.target.style.color = '#fff'; e.target.style.background = 'rgba(0,0,0,0.6)'; }}
+                            onMouseOut={e => { e.target.style.color = 'rgba(255,255,255,0.6)'; e.target.style.background = 'rgba(0,0,0,0.3)'; }}
                           >
                             nápověda
                           </button>
