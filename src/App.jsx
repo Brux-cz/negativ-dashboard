@@ -631,9 +631,126 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   const cropBounds = getTileBounds(center, tileZoom, gridSize);
+  const isEasterEggDismissed = searchQuery.toLowerCase().includes('hodkovice');
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose} ref={modalRef}>
+      {/* Windows 98 Easter Egg - PETR SVETR everywhere! */}
+      {!isEasterEggDismissed && (
+        <div
+          className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden"
+          style={{
+            background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff0000, #00ff00, #0000ff)',
+            backgroundSize: '400% 400%',
+            animation: 'rainbow 1s ease infinite',
+          }}
+        >
+          <style>{`
+            @keyframes rainbow {
+              0% { background-position: 0% 50%; }
+              50% { background-position: 100% 50%; }
+              100% { background-position: 0% 50%; }
+            }
+            @keyframes blink98 {
+              0%, 49% { opacity: 1; }
+              50%, 100% { opacity: 0; }
+            }
+            @keyframes blink98fast {
+              0%, 30% { opacity: 1; color: #ff00ff; }
+              31%, 60% { opacity: 1; color: #00ffff; }
+              61%, 100% { opacity: 1; color: #ffff00; }
+            }
+            @keyframes shake {
+              0%, 100% { transform: translate(0, 0) rotate(0deg); }
+              10% { transform: translate(-15px, 15px) rotate(-8deg); }
+              20% { transform: translate(15px, -15px) rotate(8deg); }
+              30% { transform: translate(-15px, -15px) rotate(-8deg); }
+              40% { transform: translate(15px, 15px) rotate(8deg); }
+              50% { transform: translate(-15px, 15px) rotate(-8deg); }
+              60% { transform: translate(15px, -15px) rotate(8deg); }
+              70% { transform: translate(-15px, -15px) rotate(-8deg); }
+              80% { transform: translate(15px, 15px) rotate(8deg); }
+              90% { transform: translate(-15px, 15px) rotate(-8deg); }
+            }
+            @keyframes float {
+              0%, 100% { transform: translateY(0) rotate(0deg); }
+              50% { transform: translateY(-20px) rotate(5deg); }
+            }
+          `}</style>
+
+          {/* PETR SVETR scattered everywhere */}
+          {[...Array(30)].map((_, i) => (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                left: `${(i * 17) % 100}%`,
+                top: `${(i * 23) % 100}%`,
+                fontFamily: '"Comic Sans MS", cursive',
+                fontSize: `${20 + (i % 4) * 15}px`,
+                fontWeight: 'bold',
+                color: ['#ff00ff', '#00ffff', '#ffff00', '#ff0000', '#00ff00'][i % 5],
+                textShadow: '3px 3px 0 #000',
+                animation: `blink98fast ${0.2 + (i % 5) * 0.1}s step-end infinite, float ${1 + (i % 3)}s ease-in-out infinite`,
+                animationDelay: `${i * 0.1}s`,
+                transform: `rotate(${(i * 30) % 360 - 180}deg)`,
+              }}
+            >
+              PETR SVETR
+            </div>
+          ))}
+
+          {/* Main center text */}
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ animation: 'shake 0.2s ease infinite' }}
+          >
+            <div className="text-center">
+              <div
+                style={{
+                  fontFamily: '"Comic Sans MS", cursive',
+                  fontSize: '100px',
+                  fontWeight: 'bold',
+                  textShadow: '6px 6px 0 #000, -6px -6px 0 #ff00ff, 6px -6px 0 #00ffff, -6px 6px 0 #ffff00',
+                  color: '#fff',
+                  animation: 'blink98 0.3s step-end infinite',
+                }}
+              >
+                🎉 PETR SVETR 🎉
+              </div>
+              <div
+                style={{
+                  fontFamily: '"Comic Sans MS", cursive',
+                  fontSize: '36px',
+                  color: '#00ff00',
+                  textShadow: '3px 3px 0 #000',
+                  marginTop: '20px',
+                  animation: 'blink98fast 0.2s step-end infinite',
+                }}
+              >
+                ★★★ VÍTEJTE V MATRIXU ★★★
+              </div>
+              <div
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: '18px',
+                  color: '#fff',
+                  marginTop: '40px',
+                  background: 'rgba(0,0,0,0.9)',
+                  padding: '15px 25px',
+                  border: '4px solid #ff00ff',
+                  animation: 'blink98 0.5s step-end infinite',
+                }}
+              >
+                💡 HINT: Napiš do vyhledávání kde bydlí autor... 💡
+              </div>
+              <div style={{ marginTop: '30px', fontSize: '60px', animation: 'blink98fast 0.15s step-end infinite' }}>
+                👾 🕹️ 💾 📟 🖥️ 🎮 💿 👾
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-neutral-900 rounded-lg w-full h-full shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header - Dark */}
         <div className="px-5 py-4 border-b border-neutral-700 flex items-center justify-between shrink-0">
@@ -926,22 +1043,6 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       />
                     </div>
                   )}
-                </div>
-
-                {/* World File option */}
-                <div>
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={generateWorldFileFlag}
-                      onChange={e => setGenerateWorldFileFlag(e.target.checked)}
-                      className="w-4 h-4 rounded bg-neutral-700 border-neutral-600 text-white focus:ring-white focus:ring-offset-neutral-800"
-                    />
-                    <div>
-                      <span className="text-sm text-neutral-300 group-hover:text-white transition-colors">Generovat World File</span>
-                      <p className="text-xs text-neutral-500">.{imageFormat === 'jpg' ? 'jgw' : 'pgw'} pro GIS/CAD georeferenci</p>
-                    </div>
-                  </label>
                 </div>
 
                 {/* Info section */}
