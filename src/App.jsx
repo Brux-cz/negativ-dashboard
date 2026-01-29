@@ -666,7 +666,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
     { id: 3, question: "Který den v měsíci má Petr narozeniny?", answer: "31", hint: "Poslední den v měsíci který má 31 dní" },
     { id: 4, question: "Jak se jmenuje Petrova babička?", answer: "svatava", hint: "Staročeské jméno, zní trochu svatě" },
     { id: 5, question: "Jaký je Petrův oblíbený seriál?", answer: "supernatural", hint: "Dva bratři loví démony a příšery, 15 sérií" },
-    { id: 6, question: "Máte Petra rádi?", answer: "ano", hint: "Opravdu se ptáš???" },
+    { id: 6, question: "Máte Petra rádi?", answer: "ano", hint: "Opravdu se ptáš??? Chceš zpátky do bludiště?", trapOnHint: true },
     { id: 7, question: "Ve které vesnici Petr bydlel?", answer: "hodkovice", hint: "TRAP" },
     { id: 8, question: "Jaká je Petrova oblíbená barva?", answer: "zelená", hint: "Barva trávy, lesa a přírody" },
     { id: 9, question: "Kolik má Petr sourozenců?", answer: "2", hint: "Více než jeden, méně než tři" },
@@ -675,6 +675,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
 
   // Hint visibility state
   const [showHint, setShowHint] = useState(false);
+  const [hintWasClicked, setHintWasClicked] = useState(false);
 
   // Maze walls definition - array of {x, y, width, height}
   const mazeWalls = useMemo(() => [
@@ -801,6 +802,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
         const randomQ = petrQuestions[Math.floor(Math.random() * petrQuestions.length)];
         setQuizQuestion(randomQ);
         setShowHint(false);
+        setHintWasClicked(false);
         setIsDrawing(false);
       }, 3000);
 
@@ -814,11 +816,24 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   // Check answer
   const checkAnswer = () => {
     if (quizQuestion && quizAnswer.toLowerCase().trim() === quizQuestion.answer) {
-      setShowSuccess(true);
-      setTimeout(() => {
-        setShowSuccess(false);
-        setShowMiniGame(true);
-      }, 2000);
+      // Check if this is a trap question and hint was clicked
+      if (quizQuestion.trapOnHint && hintWasClicked) {
+        // They said "ano" after reading "Chceš zpátky do bludiště?" - back to maze!
+        setMazeCompleted(false);
+        setMazeStarted(false);
+        setIsDrawing(true);
+        setQuizQuestion(null);
+        setQuizAnswer('');
+        setShowHint(false);
+        setHintWasClicked(false);
+      } else {
+        // Normal correct answer
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          setShowMiniGame(true);
+        }, 2000);
+      }
     }
   };
 
@@ -1550,6 +1565,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                                 setQuizAnswer('');
                               } else {
                                 setShowHint(true);
+                                setHintWasClicked(true);
                               }
                             }}
                             style={{
