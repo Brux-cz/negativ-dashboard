@@ -2133,6 +2133,742 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
   );
 };
 
+// =============================================================================
+// TERRAIN MODAL - 3D Terrain Mesh Download
+// =============================================================================
+// TODO: Budoucí rozšíření o placené služby:
+// - Mapbox Terrain-RGB (vyšší rozlišení, vyžaduje API klíč)
+// - Cesium World Terrain (nejkvalitnější data, quantized mesh formát)
+// - USGS 3DEP (1m rozlišení pro USA)
+// - Copernicus DEM (30m globální pokrytí, vyžaduje registraci)
+// =============================================================================
+
+// Elevation source - AWS Terrain Tiles (Terrarium format) - FREE, no API key
+const elevationSource = {
+  id: 'aws-terrarium',
+  name: 'AWS Terrain (SRTM)',
+  url: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+  tileUrl: (z, x, y) => `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`,
+  // Terrarium decoding: height = (R * 256 + G + B / 256) - 32768
+  decodeHeight: (r, g, b) => (r * 256 + g + b / 256) - 32768,
+  maxZoom: 15,
+  attribution: 'AWS/Mapzen, SRTM'
+};
+
+const TERRAIN_STORAGE_KEY = 'terrain-settings';
+
+const TerrainModal = ({ isOpen, onClose }) => {
+  // Load saved settings
+  const loadSettings = () => {
+    try {
+      const saved = localStorage.getItem(TERRAIN_STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return null;
+  };
+
+  const savedSettings = loadSettings();
+
+  const [center, setCenter] = useState(savedSettings?.center || null);
+  const [mapView, setMapView] = useState(savedSettings?.mapView || [50.0755, 14.4378]);
+  const [mapZoom, setMapZoom] = useState(savedSettings?.mapZoom || 14);
+  const [tileZoom, setTileZoom] = useState(savedSettings?.tileZoom || 12);
+  const [gridSize, setGridSize] = useState(savedSettings?.gridSize || 3);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentMapZoom, setCurrentMapZoom] = useState(14);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [verticalScale, setVerticalScale] = useState(savedSettings?.verticalScale || 1);
+  const [meshResolution, setMeshResolution] = useState(savedSettings?.meshResolution || 256);
+  const [exportFormat, setExportFormat] = useState(savedSettings?.exportFormat || 'obj');
+  const [generateTexture, setGenerateTexture] = useState(savedSettings?.generateTexture ?? true);
+  const [textureSource, setTextureSource] = useState(savedSettings?.textureSource || 'google');
+
+  const modalRef = useRef(null);
+  const mapContainerRef = useRef(null);
+
+  const handleZoomChange = useCallback((zoom) => {
+    setCurrentMapZoom(Math.round(zoom));
+  }, []);
+
+  // Save settings
+  useEffect(() => {
+    const settings = {
+      center,
+      mapView,
+      mapZoom,
+      tileZoom,
+      gridSize,
+      verticalScale,
+      meshResolution,
+      exportFormat,
+      generateTexture,
+      textureSource,
+    };
+    localStorage.setItem(TERRAIN_STORAGE_KEY, JSON.stringify(settings));
+  }, [center, mapView, mapZoom, tileZoom, gridSize, verticalScale, meshResolution, exportFormat, generateTexture, textureSource]);
+
+  // Grid and zoom options
+  const gridSizes = [
+    { value: 1, label: '1×1' },
+    { value: 2, label: '2×2' },
+    { value: 3, label: '3×3' },
+    { value: 4, label: '4×4' },
+  ];
+
+  const terrainZooms = [
+    { value: 10, label: '10 (~1km/tile)' },
+    { value: 11, label: '11 (~500m/tile)' },
+    { value: 12, label: '12 (~250m/tile)' },
+    { value: 13, label: '13 (~125m/tile)' },
+    { value: 14, label: '14 (~60m/tile)' },
+  ];
+
+  const meshResolutions = [
+    { value: 128, label: '128×128' },
+    { value: 256, label: '256×256' },
+    { value: 512, label: '512×512' },
+  ];
+
+  const handleMapClick = useCallback((latlng) => {
+    setCenter(latlng);
+  }, []);
+
+  // Search
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+
+    const coordMatch = searchQuery.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lon = parseFloat(coordMatch[2]);
+      if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        setCenter([lat, lon]);
+        setMapView([lat, lon]);
+        setMapZoom(14);
+        setSearchResults([]);
+        return;
+      }
+    }
+
+    setSearching(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5&addressdetails=1`
+      );
+      const data = await response.json();
+      setSearchResults(data.map(item => ({
+        name: item.display_name,
+        lat: parseFloat(item.lat),
+        lon: parseFloat(item.lon),
+      })));
+    } catch (e) {
+      console.error('Search failed:', e);
+    }
+    setSearching(false);
+  };
+
+  const selectSearchResult = (result) => {
+    setCenter([result.lat, result.lon]);
+    setMapView([result.lat, result.lon]);
+    setMapZoom(14);
+    setSearchResults([]);
+    setSearchQuery('');
+  };
+
+  // Generate OBJ mesh from heightmap data
+  const generateOBJMesh = (heightData, width, height, bounds, vScale) => {
+    const [[lat1, lon1], [lat2, lon2]] = bounds;
+    const realWidth = getDistanceMeters(lat1, lon1, lat1, lon2);
+    const realHeight = getDistanceMeters(lat1, lon1, lat2, lon1);
+
+    let obj = '# Terrain mesh generated by Negativ Tools\n';
+    obj += `# Bounds: ${lat1},${lon1} to ${lat2},${lon2}\n`;
+    obj += `# Real size: ${realWidth.toFixed(0)}m x ${realHeight.toFixed(0)}m\n`;
+    obj += `# Vertical scale: ${vScale}x\n\n`;
+
+    // Generate vertices
+    obj += '# Vertices\n';
+    const stepX = realWidth / (width - 1);
+    const stepZ = realHeight / (height - 1);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const px = x * stepX;
+        const pz = y * stepZ;
+        const py = heightData[y * width + x] * vScale;
+        obj += `v ${px.toFixed(3)} ${py.toFixed(3)} ${pz.toFixed(3)}\n`;
+      }
+    }
+
+    // Generate texture coordinates
+    obj += '\n# Texture coordinates\n';
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const u = x / (width - 1);
+        const v = 1 - (y / (height - 1));
+        obj += `vt ${u.toFixed(4)} ${v.toFixed(4)}\n`;
+      }
+    }
+
+    // Generate normals (simplified - pointing up, could be improved)
+    obj += '\n# Normals\n';
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        // Calculate normal from surrounding vertices
+        let nx = 0, ny = 1, nz = 0;
+        if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
+          const hL = heightData[y * width + (x - 1)] * vScale;
+          const hR = heightData[y * width + (x + 1)] * vScale;
+          const hU = heightData[(y - 1) * width + x] * vScale;
+          const hD = heightData[(y + 1) * width + x] * vScale;
+          nx = (hL - hR) / (2 * stepX);
+          nz = (hU - hD) / (2 * stepZ);
+          const len = Math.sqrt(nx * nx + 1 + nz * nz);
+          nx /= len;
+          ny = 1 / len;
+          nz /= len;
+        }
+        obj += `vn ${nx.toFixed(4)} ${ny.toFixed(4)} ${nz.toFixed(4)}\n`;
+      }
+    }
+
+    // Generate faces (triangles)
+    obj += '\n# Faces\n';
+    for (let y = 0; y < height - 1; y++) {
+      for (let x = 0; x < width - 1; x++) {
+        const i1 = y * width + x + 1;
+        const i2 = y * width + x + 2;
+        const i3 = (y + 1) * width + x + 1;
+        const i4 = (y + 1) * width + x + 2;
+
+        // Two triangles per quad
+        obj += `f ${i1}/${i1}/${i1} ${i3}/${i3}/${i3} ${i2}/${i2}/${i2}\n`;
+        obj += `f ${i2}/${i2}/${i2} ${i3}/${i3}/${i3} ${i4}/${i4}/${i4}\n`;
+      }
+    }
+
+    return obj;
+  };
+
+  // Download terrain and generate mesh
+  const handleDownload = async () => {
+    if (!center) return;
+
+    setDownloading(true);
+    setDownloadProgress(0);
+
+    try {
+      const centerTile = deg2tile(center[0], center[1], tileZoom);
+      const halfGrid = Math.floor(gridSize / 2);
+
+      // Calculate bounds
+      const startX = centerTile.x - halfGrid;
+      const startY = centerTile.y - halfGrid;
+      const endX = startX + gridSize;
+      const endY = startY + gridSize;
+
+      const topLeft = tile2deg(startX, startY, tileZoom);
+      const bottomRight = tile2deg(endX, endY, tileZoom);
+      const bounds = [[topLeft.lat, topLeft.lon], [bottomRight.lat, bottomRight.lon]];
+
+      // Create canvas for elevation tiles
+      const tileSize = 256;
+      const totalTiles = gridSize * gridSize;
+      const canvas = document.createElement('canvas');
+      canvas.width = gridSize * tileSize;
+      canvas.height = gridSize * tileSize;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      // Load elevation tiles
+      const tiles = [];
+      for (let dy = 0; dy < gridSize; dy++) {
+        for (let dx = 0; dx < gridSize; dx++) {
+          tiles.push({
+            x: startX + dx,
+            y: startY + dy,
+            canvasX: dx * tileSize,
+            canvasY: dy * tileSize,
+          });
+        }
+      }
+
+      let loaded = 0;
+      for (const tile of tiles) {
+        await new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            ctx.drawImage(img, tile.canvasX, tile.canvasY, tileSize, tileSize);
+            resolve(true);
+          };
+          img.onerror = () => {
+            ctx.fillStyle = '#808080'; // Mid-gray for missing tiles
+            ctx.fillRect(tile.canvasX, tile.canvasY, tileSize, tileSize);
+            resolve(false);
+          };
+          img.src = elevationSource.tileUrl(tileZoom, tile.x, tile.y);
+        });
+        loaded++;
+        setDownloadProgress((loaded / totalTiles) * 50);
+      }
+
+      // Resample to desired mesh resolution
+      const outputSize = meshResolution;
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const heightData = new Float32Array(outputSize * outputSize);
+
+      const scaleX = canvas.width / outputSize;
+      const scaleY = canvas.height / outputSize;
+
+      let minHeight = Infinity;
+      let maxHeight = -Infinity;
+
+      for (let y = 0; y < outputSize; y++) {
+        for (let x = 0; x < outputSize; x++) {
+          const srcX = Math.floor(x * scaleX);
+          const srcY = Math.floor(y * scaleY);
+          const idx = (srcY * canvas.width + srcX) * 4;
+
+          const r = imageData.data[idx];
+          const g = imageData.data[idx + 1];
+          const b = imageData.data[idx + 2];
+
+          const height = elevationSource.decodeHeight(r, g, b);
+          heightData[y * outputSize + x] = height;
+
+          minHeight = Math.min(minHeight, height);
+          maxHeight = Math.max(maxHeight, height);
+        }
+        setDownloadProgress(50 + (y / outputSize) * 30);
+      }
+
+      // Normalize heights (optional - subtract min to start from 0)
+      for (let i = 0; i < heightData.length; i++) {
+        heightData[i] -= minHeight;
+      }
+
+      setDownloadProgress(85);
+
+      // Generate filename
+      const date = new Date();
+      const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+      const latStr = center[0].toFixed(3).replace('.', '_');
+      const lonStr = center[1].toFixed(3).replace('.', '_');
+      const baseFilename = `terrain_${latStr}_${lonStr}_z${tileZoom}_${dateStr}`;
+
+      // Generate and download OBJ
+      const objContent = generateOBJMesh(heightData, outputSize, outputSize, bounds, verticalScale);
+      const objBlob = new Blob([objContent], { type: 'text/plain' });
+      const objUrl = URL.createObjectURL(objBlob);
+      const objLink = document.createElement('a');
+      objLink.download = `${baseFilename}.obj`;
+      objLink.href = objUrl;
+      objLink.click();
+      URL.revokeObjectURL(objUrl);
+
+      setDownloadProgress(90);
+
+      // Generate texture if requested
+      if (generateTexture) {
+        const textureCanvas = document.createElement('canvas');
+        const textureSize = meshResolution * 2; // Higher res texture
+        textureCanvas.width = textureSize;
+        textureCanvas.height = textureSize;
+        const textureCtx = textureCanvas.getContext('2d');
+
+        const textureTileZoom = Math.min(tileZoom + 2, 19);
+        const textureCenterTile = deg2tile(center[0], center[1], textureTileZoom);
+        const textureHalfGrid = Math.floor(gridSize * 2);
+
+        const textureUrl = textureSource === 'google'
+          ? (z, x, y) => `https://mt1.google.com/vt/lyrs=s&x=${x}&y=${y}&z=${z}`
+          : (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+
+        // Simple texture - just download center area
+        const texTiles = [];
+        for (let dy = -textureHalfGrid; dy < textureHalfGrid; dy++) {
+          for (let dx = -textureHalfGrid; dx < textureHalfGrid; dx++) {
+            const texX = (dx + textureHalfGrid) / (textureHalfGrid * 2) * textureSize;
+            const texY = (dy + textureHalfGrid) / (textureHalfGrid * 2) * textureSize;
+            texTiles.push({
+              x: textureCenterTile.x + dx,
+              y: textureCenterTile.y + dy,
+              canvasX: texX,
+              canvasY: texY,
+              size: textureSize / (textureHalfGrid * 2),
+            });
+          }
+        }
+
+        // Load first few texture tiles (limit for performance)
+        const maxTexTiles = Math.min(texTiles.length, 16);
+        for (let i = 0; i < maxTexTiles; i++) {
+          const tile = texTiles[i];
+          await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+              textureCtx.drawImage(img, tile.canvasX, tile.canvasY, tile.size, tile.size);
+              resolve(true);
+            };
+            img.onerror = () => resolve(false);
+            img.src = textureUrl(textureTileZoom, tile.x, tile.y);
+          });
+        }
+
+        textureCanvas.toBlob((blob) => {
+          const texUrl = URL.createObjectURL(blob);
+          const texLink = document.createElement('a');
+          texLink.download = `${baseFilename}_texture.jpg`;
+          texLink.href = texUrl;
+          setTimeout(() => {
+            texLink.click();
+            URL.revokeObjectURL(texUrl);
+          }, 200);
+        }, 'image/jpeg', 0.9);
+      }
+
+      setDownloadProgress(100);
+
+      setTimeout(() => {
+        setDownloading(false);
+        setDownloadProgress(0);
+      }, 500);
+
+    } catch (error) {
+      console.error('Download failed:', error);
+      setDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
+
+  // Calculate bounds for display
+  const bounds = useMemo(() => {
+    if (!center) return null;
+    const centerTile = deg2tile(center[0], center[1], tileZoom);
+    const halfGrid = Math.floor(gridSize / 2);
+    const startX = centerTile.x - halfGrid;
+    const startY = centerTile.y - halfGrid;
+    const endX = startX + gridSize;
+    const endY = startY + gridSize;
+    const topLeft = tile2deg(startX, startY, tileZoom);
+    const bottomRight = tile2deg(endX, endY, tileZoom);
+    return [[topLeft.lat, topLeft.lon], [bottomRight.lat, bottomRight.lon]];
+  }, [center, tileZoom, gridSize]);
+
+  // Escape to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        ref={modalRef}
+        className="bg-neutral-900 rounded-lg w-full max-w-6xl h-[85vh] shadow-2xl overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-4 border-b border-neutral-800 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-neutral-800 rounded-lg flex items-center justify-center">
+              <Mountain className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-medium text-white">3D Terrain</h2>
+              <p className="text-xs text-neutral-500">SRTM Elevation Data → OBJ Mesh</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Map */}
+          <div className="flex-1 relative" ref={mapContainerRef}>
+            <MapContainer
+              center={mapView}
+              zoom={mapZoom}
+              className="w-full h-full"
+              zoomControl={false}
+            >
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution=""
+              />
+              <MapClickHandler onMapClick={handleMapClick} onZoomChange={handleZoomChange} />
+              <MapViewController center={mapView} zoom={mapZoom} />
+
+              {bounds && (
+                <>
+                  <Rectangle
+                    bounds={bounds}
+                    pathOptions={{
+                      color: '#f97316',
+                      weight: 2,
+                      fillColor: '#f97316',
+                      fillOpacity: 0.1,
+                    }}
+                  />
+                  <DarkOverlay bounds={bounds} />
+                  <DimensionLabels bounds={bounds} portalContainer={mapContainerRef.current} />
+                </>
+              )}
+
+              {center && (
+                <Marker position={center} icon={centerIcon}>
+                  <Popup>
+                    <div className="text-xs">
+                      <div className="font-medium">Střed výběru</div>
+                      <div className="text-neutral-500">
+                        {center[0].toFixed(5)}, {center[1].toFixed(5)}
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              )}
+            </MapContainer>
+
+            {/* Search overlay */}
+            <div className="absolute top-4 left-4 right-4 z-[1000]">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder="Hledat místo nebo zadat souřadnice..."
+                  className="w-full max-w-md px-4 py-2.5 pl-10 bg-white/95 backdrop-blur rounded-lg text-sm text-neutral-900 placeholder-neutral-400 shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                {searching && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-neutral-300 border-t-orange-500 rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+
+              {searchResults.length > 0 && (
+                <div className="mt-2 bg-white/95 backdrop-blur rounded-lg shadow-lg overflow-hidden max-w-md">
+                  {searchResults.map((result, i) => (
+                    <button
+                      key={i}
+                      onClick={() => selectSearchResult(result)}
+                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-neutral-100 border-b border-neutral-100 last:border-0"
+                    >
+                      <div className="text-neutral-900 truncate">{result.name}</div>
+                      <div className="text-xs text-neutral-400">
+                        {result.lat.toFixed(4)}, {result.lon.toFixed(4)}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Zoom info */}
+            <div className="absolute bottom-4 left-4 z-[1000] bg-black/70 text-white text-xs px-2 py-1 rounded">
+              Zoom: {currentMapZoom}
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="w-80 bg-neutral-900 border-l border-neutral-800 flex flex-col overflow-y-auto">
+            <div className="p-4 space-y-5">
+              {/* Source info */}
+              <div>
+                <label className="block text-xs text-neutral-500 mb-2">Zdroj dat</label>
+                <div className="bg-neutral-800 rounded-lg p-3">
+                  <div className="text-sm text-white font-medium">{elevationSource.name}</div>
+                  <div className="text-xs text-neutral-400 mt-1">{elevationSource.attribution}</div>
+                  <div className="text-[10px] text-orange-400 mt-2">
+                    * Bezplatný zdroj bez API klíče
+                  </div>
+                </div>
+              </div>
+
+              {/* Tile zoom */}
+              <div>
+                <label className="block text-xs text-neutral-500 mb-2">Detail terénu</label>
+                <div className="grid grid-cols-3 gap-1">
+                  {terrainZooms.map(z => (
+                    <button
+                      key={z.value}
+                      onClick={() => setTileZoom(z.value)}
+                      className={`px-2 py-1.5 text-xs rounded ${
+                        tileZoom === z.value
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                      }`}
+                    >
+                      z{z.value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Grid size */}
+              <div>
+                <label className="block text-xs text-neutral-500 mb-2">Velikost oblasti</label>
+                <div className="grid grid-cols-4 gap-1">
+                  {gridSizes.map(g => (
+                    <button
+                      key={g.value}
+                      onClick={() => setGridSize(g.value)}
+                      className={`px-2 py-1.5 text-xs rounded ${
+                        gridSize === g.value
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                      }`}
+                    >
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mesh resolution */}
+              <div>
+                <label className="block text-xs text-neutral-500 mb-2">Rozlišení mesh</label>
+                <div className="grid grid-cols-3 gap-1">
+                  {meshResolutions.map(r => (
+                    <button
+                      key={r.value}
+                      onClick={() => setMeshResolution(r.value)}
+                      className={`px-2 py-1.5 text-xs rounded ${
+                        meshResolution === r.value
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Vertical scale */}
+              <div>
+                <label className="block text-xs text-neutral-500 mb-2">
+                  Vertikální měřítko: {verticalScale}×
+                </label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="5"
+                  step="0.5"
+                  value={verticalScale}
+                  onChange={(e) => setVerticalScale(parseFloat(e.target.value))}
+                  className="w-full accent-orange-500"
+                />
+                <div className="flex justify-between text-[10px] text-neutral-500 mt-1">
+                  <span>0.5×</span>
+                  <span>1× (reálné)</span>
+                  <span>5×</span>
+                </div>
+              </div>
+
+              {/* Texture option */}
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={generateTexture}
+                    onChange={(e) => setGenerateTexture(e.target.checked)}
+                    className="w-4 h-4 rounded border-neutral-600 bg-neutral-800 text-orange-500 focus:ring-orange-500"
+                  />
+                  <span className="text-sm text-white">Stáhnout ortho texturu</span>
+                </label>
+                {generateTexture && (
+                  <div className="mt-2 ml-6 flex gap-2">
+                    <button
+                      onClick={() => setTextureSource('google')}
+                      className={`px-2 py-1 text-xs rounded ${
+                        textureSource === 'google'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-neutral-800 text-neutral-400'
+                      }`}
+                    >
+                      Google
+                    </button>
+                    <button
+                      onClick={() => setTextureSource('esri')}
+                      className={`px-2 py-1 text-xs rounded ${
+                        textureSource === 'esri'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-neutral-800 text-neutral-400'
+                      }`}
+                    >
+                      Esri
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Bounds info */}
+              {center && bounds && (
+                <div className="bg-neutral-800/50 rounded-lg p-3">
+                  <div className="text-xs text-neutral-500 mb-2">Vybraná oblast</div>
+                  <div className="text-sm text-white font-mono">
+                    {center[0].toFixed(4)}, {center[1].toFixed(4)}
+                  </div>
+                  <div className="text-xs text-neutral-400 mt-1">
+                    ~{formatDistance(getDistanceMeters(bounds[0][0], bounds[0][1], bounds[0][0], bounds[1][1]))} × {formatDistance(getDistanceMeters(bounds[0][0], bounds[0][1], bounds[1][0], bounds[0][1]))}
+                  </div>
+                </div>
+              )}
+
+              {/* Download button */}
+              <div className="pt-2">
+                {downloading ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-neutral-400">
+                      <span>Generuji mesh...</span>
+                      <span>{Math.round(downloadProgress)}%</span>
+                    </div>
+                    <div className="w-full bg-neutral-800 rounded-full h-2">
+                      <div
+                        className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${downloadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleDownload}
+                    disabled={!center}
+                    className="w-full py-3 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 disabled:bg-neutral-700 disabled:text-neutral-500 flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Stáhnout OBJ Mesh
+                  </button>
+                )}
+                {!center && (
+                  <p className="text-xs text-neutral-500 text-center mt-2">
+                    Klikni na mapu pro výběr oblasti
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AIBuildingModal = ({ isOpen, onClose }) => {
   const [uploadedImages, setUploadedImages] = useState([]);
   const [currentPhase, setCurrentPhase] = useState('upload');
@@ -2200,6 +2936,7 @@ export default function App() {
   const [showBuildingModal, setShowBuildingModal] = useState(false);
   const [showAtmosphereModal, setShowAtmosphereModal] = useState(false);
   const [showOrthoModal, setShowOrthoModal] = useState(false);
+  const [showTerrainModal, setShowTerrainModal] = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
 
   const [orthoShiftHeld, setOrthoShiftHeld] = useState(false);
@@ -2211,6 +2948,7 @@ export default function App() {
       setOrthoShiftHeld(event?.shiftKey || false);
       setShowOrthoModal(true);
     }
+    else if (id === 'terrain') setShowTerrainModal(true);
   };
   
   const filteredTools = activeCategory === 'all' ? tools : tools.filter(t => t.category === activeCategory);
@@ -2331,6 +3069,7 @@ export default function App() {
       <AIBuildingModal isOpen={showBuildingModal} onClose={() => setShowBuildingModal(false)} />
       <AtmosphereModal isOpen={showAtmosphereModal} onClose={() => setShowAtmosphereModal(false)} />
       <OrthoMapModal isOpen={showOrthoModal} onClose={() => setShowOrthoModal(false)} shiftHeld={orthoShiftHeld} />
+      <TerrainModal isOpen={showTerrainModal} onClose={() => setShowTerrainModal(false)} />
     </div>
   );
 }
