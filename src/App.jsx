@@ -157,9 +157,17 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
 
   const savedSettings = loadSettings();
 
-  const [selectedSource, setSelectedSource] = useState(() =>
-    orthoSources.find(s => s.id === savedSettings?.sourceId) || orthoSources[0]
-  );
+  // Clear invalid source from localStorage if it doesn't exist anymore
+  const getValidSource = () => {
+    const found = orthoSources.find(s => s.id === savedSettings?.sourceId);
+    if (!found && savedSettings?.sourceId) {
+      // Remove invalid source from localStorage
+      localStorage.removeItem(STORAGE_KEY);
+    }
+    return found || orthoSources[0];
+  };
+
+  const [selectedSource, setSelectedSource] = useState(getValidSource);
   const [center, setCenter] = useState(savedSettings?.center || null);
   const [mapView, setMapView] = useState(savedSettings?.mapView || [50.0755, 14.4378]);
   const [mapZoom, setMapZoom] = useState(savedSettings?.mapZoom || 14);
