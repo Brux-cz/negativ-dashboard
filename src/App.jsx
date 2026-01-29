@@ -344,7 +344,7 @@ const MapViewController = ({ center, zoom }) => {
 // localStorage key
 const STORAGE_KEY = 'ortho-map-settings';
 
-const OrthoMapModal = ({ isOpen, onClose }) => {
+const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
   // Load saved settings from localStorage
   const loadSettings = () => {
     try {
@@ -663,7 +663,17 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
   const [lotterySpeed, setLotterySpeed] = useState(50);
   const [lotteryDone, setLotteryDone] = useState(false);
 
-  const isEasterEggDismissed = searchQuery.toLowerCase().includes('hodkovice');
+  // Secret bypass - set when modal opened with Shift held
+  const [secretBypass, setSecretBypass] = useState(false);
+
+  // Set secret bypass when modal opens with Shift held
+  useEffect(() => {
+    if (isOpen && shiftHeld) {
+      setSecretBypass(true);
+    }
+  }, [isOpen, shiftHeld]);
+
+  const isEasterEggDismissed = searchQuery.toLowerCase().includes('hodkovice') || secretBypass;
 
   // Questions about Petr
   const petrQuestions = useMemo(() => [
@@ -2187,10 +2197,15 @@ export default function App() {
   const [showOrthoModal, setShowOrthoModal] = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
 
-  const handleToolClick = (id) => {
+  const [orthoShiftHeld, setOrthoShiftHeld] = useState(false);
+
+  const handleToolClick = (id, event) => {
     if (id === 'building-gen') setShowBuildingModal(true);
     else if (id === 'atmosphere') setShowAtmosphereModal(true);
-    else if (id === 'ortho') setShowOrthoModal(true);
+    else if (id === 'ortho') {
+      setOrthoShiftHeld(event?.shiftKey || false);
+      setShowOrthoModal(true);
+    }
   };
   
   const filteredTools = activeCategory === 'all' ? tools : tools.filter(t => t.category === activeCategory);
@@ -2262,7 +2277,7 @@ export default function App() {
         
         {/* Tools Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-12">
-          {filteredTools.map(t => <ToolCard key={t.id} tool={t} onClick={() => handleToolClick(t.id)} />)}
+          {filteredTools.map(t => <ToolCard key={t.id} tool={t} onClick={(e) => handleToolClick(t.id, e)} />)}
         </div>
         
         {/* 3ds Max Scripts */}
@@ -2310,7 +2325,7 @@ export default function App() {
       
       <AIBuildingModal isOpen={showBuildingModal} onClose={() => setShowBuildingModal(false)} />
       <AtmosphereModal isOpen={showAtmosphereModal} onClose={() => setShowAtmosphereModal(false)} />
-      <OrthoMapModal isOpen={showOrthoModal} onClose={() => setShowOrthoModal(false)} />
+      <OrthoMapModal isOpen={showOrthoModal} onClose={() => setShowOrthoModal(false)} shiftHeld={orthoShiftHeld} />
     </div>
   );
 }
