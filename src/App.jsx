@@ -1395,7 +1395,8 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                       {clickCount} / 20
                     </div>
                     <button
-                      onClick={() => gameTimeLeft > 0 && setClickCount(c => c + 1)}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); if (gameTimeLeft > 0) setClickCount(c => c + 1); }}
                       disabled={gameTimeLeft === 0}
                       style={{
                         padding: '40px 80px',
@@ -1429,8 +1430,9 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                     <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginBottom: '20px' }}>
                       {['#ff0000', '#00ff00', '#0000ff', '#ffff00'].map((color, i) => (
                         <button
+                          type="button"
                           key={i}
-                          onClick={() => handleMemoryClick(i)}
+                          onClick={(e) => { e.stopPropagation(); handleMemoryClick(i); }}
                           disabled={memoryShowIndex < memorySequence.length}
                           style={{
                             width: '80px',
@@ -1485,7 +1487,8 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                           type="number"
                           value={mathAnswer}
                           onChange={e => setMathAnswer(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && checkMathAnswer()}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); checkMathAnswer(); } }}
+                          onClick={e => e.stopPropagation()}
                           autoFocus
                           style={{
                             padding: '15px 30px',
@@ -1503,7 +1506,8 @@ const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                         />
                         <div style={{ marginTop: '15px' }}>
                           <button
-                            onClick={checkMathAnswer}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); checkMathAnswer(); }}
                             style={{
                               padding: '12px 40px',
                               fontSize: '18px',
