@@ -128,6 +128,19 @@ const MapClickHandler = ({ onMapClick, onZoomChange }) => {
   return null;
 };
 
+// Map view controller - moves map when center changes
+const MapViewController = ({ center, zoom }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (center) {
+      map.setView(center, zoom, { animate: true });
+    }
+  }, [map, center, zoom]);
+
+  return null;
+};
+
 // localStorage key
 const STORAGE_KEY = 'ortho-map-settings';
 
@@ -349,6 +362,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
             >
               <TileLayer url={selectedSource.url} maxZoom={21} />
               <MapClickHandler onMapClick={handleMapClick} onZoomChange={handleZoomChange} />
+              <MapViewController center={mapView} zoom={mapZoom} />
 
               {center && (
                 <Marker position={center} icon={centerIcon}>
