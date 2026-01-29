@@ -344,7 +344,9 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
     }
   }, [isOpen, shiftHeld]);
 
-  const isEasterEggDismissed = searchQuery.toLowerCase().includes('hodkovice') || secretBypass;
+  // TEMP: Easter egg disabled for demo - set to false to re-enable
+  const DISABLE_EASTER_EGG = true;
+  const isEasterEggDismissed = DISABLE_EASTER_EGG || searchQuery.toLowerCase().includes('hodkovice') || secretBypass;
 
   // Questions about Petr
   const petrQuestions = useMemo(() => [
