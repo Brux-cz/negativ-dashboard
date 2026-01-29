@@ -638,8 +638,8 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
         {/* Header - Dark */}
         <div className="px-5 py-4 border-b border-neutral-700 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
-              <Map className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+              <Map className="w-5 h-5 text-neutral-900" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-white">Ortho Map Downloader</h2>
@@ -682,7 +682,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 <Rectangle
                   bounds={cropBounds}
                   pathOptions={{
-                    color: '#10b981',
+                    color: '#ffffff',
                     weight: 2,
                     fillColor: 'transparent',
                     fillOpacity: 0,
@@ -748,12 +748,12 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       onChange={e => setSearchQuery(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleSearch()}
                       placeholder="Adresa nebo 50.0755, 14.4378"
-                      className="flex-1 px-3 py-2.5 text-sm bg-neutral-700 border border-neutral-600 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                      className="flex-1 px-3 py-2.5 text-sm bg-neutral-700 border border-neutral-600 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:border-white focus:ring-1 focus:ring-white"
                     />
                     <button
                       onClick={handleSearch}
                       disabled={searching}
-                      className="px-3 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:bg-neutral-600 transition-colors"
+                      className="px-3 py-2.5 bg-white text-neutral-900 rounded-lg hover:bg-neutral-200 disabled:bg-neutral-600 transition-colors"
                     >
                       {searching ? '...' : <MapPin className="w-4 h-4" />}
                     </button>
@@ -788,7 +788,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                         onClick={() => setSelectedSource(source)}
                         className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
                           selectedSource.id === source.id
-                            ? 'bg-emerald-500 text-white'
+                            ? 'bg-white text-neutral-900'
                             : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                         }`}
                       >
@@ -802,7 +802,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-neutral-300">Zoom pro stažení</label>
-                    <span className="text-sm font-mono text-emerald-400">{tileZoom}</span>
+                    <span className="text-sm font-mono text-white">{tileZoom}</span>
                   </div>
                   <input
                     type="range"
@@ -810,7 +810,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                     max={21}
                     value={tileZoom}
                     onChange={e => setTileZoom(parseInt(e.target.value))}
-                    className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                    className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-white"
                   />
                   <div className="flex justify-between text-xs text-neutral-500 mt-1">
                     <span>17</span>
@@ -821,7 +821,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                   </div>
                   <button
                     onClick={() => setTileZoom(Math.min(21, Math.max(17, currentMapZoom)))}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 mt-2"
+                    className="text-xs text-white hover:text-neutral-300 mt-2"
                   >
                     Použít aktuální zoom mapy ({currentMapZoom})
                   </button>
@@ -837,7 +837,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                         onClick={() => { setGridSize(p.value); setUseCustomSize(false); }}
                         className={`py-2 rounded-lg text-sm font-medium transition-all ${
                           gridSize === p.value && !useCustomSize
-                            ? 'bg-emerald-500 text-white'
+                            ? 'bg-white text-neutral-900'
                             : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                         }`}
                       >
@@ -851,7 +851,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                     onClick={() => setUseCustomSize(!useCustomSize)}
                     className={`w-full py-2 rounded-lg text-sm font-medium transition-all mb-2 ${
                       useCustomSize
-                        ? 'bg-emerald-500 text-white'
+                        ? 'bg-white text-neutral-900'
                         : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                     }`}
                   >
@@ -866,7 +866,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                           type="number"
                           value={customWidth}
                           onChange={e => setCustomWidth(parseInt(e.target.value) || 256)}
-                          className="w-full px-3 py-2 text-sm bg-neutral-700 border border-neutral-600 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                          className="w-full px-3 py-2 text-sm bg-neutral-700 border border-neutral-600 rounded-lg text-white focus:outline-none focus:border-white"
                         />
                       </div>
                       <div className="flex-1">
@@ -875,7 +875,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                           type="number"
                           value={customHeight}
                           onChange={e => setCustomHeight(parseInt(e.target.value) || 256)}
-                          className="w-full px-3 py-2 text-sm bg-neutral-700 border border-neutral-600 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                          className="w-full px-3 py-2 text-sm bg-neutral-700 border border-neutral-600 rounded-lg text-white focus:outline-none focus:border-white"
                         />
                       </div>
                     </div>
@@ -890,7 +890,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       onClick={() => setImageFormat('png')}
                       className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
                         imageFormat === 'png'
-                          ? 'bg-emerald-500 text-white'
+                          ? 'bg-white text-neutral-900'
                           : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                       }`}
                     >
@@ -901,7 +901,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       onClick={() => setImageFormat('jpg')}
                       className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
                         imageFormat === 'jpg'
-                          ? 'bg-emerald-500 text-white'
+                          ? 'bg-white text-neutral-900'
                           : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                       }`}
                     >
@@ -914,7 +914,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                     <div className="mt-3">
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs text-neutral-500">Kvalita</label>
-                        <span className="text-xs font-mono text-emerald-400">{jpgQuality}%</span>
+                        <span className="text-xs font-mono text-white">{jpgQuality}%</span>
                       </div>
                       <input
                         type="range"
@@ -922,7 +922,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                         max={100}
                         value={jpgQuality}
                         onChange={e => setJpgQuality(parseInt(e.target.value))}
-                        className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-white"
                       />
                     </div>
                   )}
@@ -935,7 +935,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                       type="checkbox"
                       checked={generateWorldFileFlag}
                       onChange={e => setGenerateWorldFileFlag(e.target.checked)}
-                      className="w-4 h-4 rounded bg-neutral-700 border-neutral-600 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-neutral-800"
+                      className="w-4 h-4 rounded bg-neutral-700 border-neutral-600 text-white focus:ring-white focus:ring-offset-neutral-800"
                     />
                     <div>
                       <span className="text-sm text-neutral-300 group-hover:text-white transition-colors">Generovat World File</span>
@@ -956,7 +956,7 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-neutral-400">Odhad velikosti:</span>
-                    <span className="font-mono text-emerald-400">~{estimatedSize.toFixed(1)} MB</span>
+                    <span className="font-mono text-white">~{estimatedSize.toFixed(1)} MB</span>
                   </div>
                 </div>
 
@@ -966,20 +966,20 @@ const OrthoMapModal = ({ isOpen, onClose }) => {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-neutral-300 flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           Generuji...
                         </span>
-                        <span className="font-mono text-emerald-400">{Math.round(downloadProgress)}%</span>
+                        <span className="font-mono text-white">{Math.round(downloadProgress)}%</span>
                       </div>
                       <div className="w-full bg-neutral-700 rounded-full h-2">
-                        <div className="bg-emerald-500 h-2 rounded-full transition-all" style={{ width: `${downloadProgress}%` }} />
+                        <div className="bg-white h-2 rounded-full transition-all" style={{ width: `${downloadProgress}%` }} />
                       </div>
                     </div>
                   ) : (
                     <button
                       onClick={handleDownload}
                       disabled={!center}
-                      className="w-full py-3.5 bg-emerald-500 text-white text-sm font-semibold rounded-lg hover:bg-emerald-600 disabled:bg-neutral-700 disabled:text-neutral-500 flex items-center justify-center gap-2 transition-colors"
+                      className="w-full py-3.5 bg-white text-neutral-900 text-sm font-semibold rounded-lg hover:bg-neutral-200 disabled:bg-neutral-700 disabled:text-neutral-500 flex items-center justify-center gap-2 transition-colors"
                     >
                       <Download className="w-5 h-5" />
                       Stáhnout {imageFormat.toUpperCase()}
@@ -1019,7 +1019,7 @@ const AIBuildingModal = ({ isOpen, onClose }) => {
           <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5">
-          {currentPhase === 'upload' && (<div className="space-y-4"><div><h3 className="text-xs font-medium mb-2">1. Nahraj referenční fotky</h3><div className="grid grid-cols-5 gap-2">{[...Array(5)].map((_, i) => (<button key={i} onClick={handleUploadClick} className={`aspect-square rounded-sm border-2 border-dashed flex items-center justify-center transition-all ${uploadedImages[i] ? 'border-emerald-500 bg-emerald-50' : 'border-neutral-200 hover:border-neutral-400'}`}>{uploadedImages[i] ? <Check className="w-5 h-5 text-emerald-500" /> : <Upload className="w-5 h-5 text-neutral-300" />}</button>))}</div><p className="text-[10px] text-neutral-400 mt-1">Nahráno {uploadedImages.length}/5</p></div><button onClick={handleGenerateViews} disabled={uploadedImages.length === 0} className="w-full py-2.5 bg-neutral-900 text-white text-sm rounded-sm hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 flex items-center justify-center gap-2"><Zap className="w-4 h-4" />Generovat pohledy</button></div>)}
+          {currentPhase === 'upload' && (<div className="space-y-4"><div><h3 className="text-xs font-medium mb-2">1. Nahraj referenční fotky</h3><div className="grid grid-cols-5 gap-2">{[...Array(5)].map((_, i) => (<button key={i} onClick={handleUploadClick} className={`aspect-square rounded-sm border-2 border-dashed flex items-center justify-center transition-all ${uploadedImages[i] ? 'border-white bg-emerald-50' : 'border-neutral-200 hover:border-neutral-400'}`}>{uploadedImages[i] ? <Check className="w-5 h-5 text-white" /> : <Upload className="w-5 h-5 text-neutral-300" />}</button>))}</div><p className="text-[10px] text-neutral-400 mt-1">Nahráno {uploadedImages.length}/5</p></div><button onClick={handleGenerateViews} disabled={uploadedImages.length === 0} className="w-full py-2.5 bg-neutral-900 text-white text-sm rounded-sm hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 flex items-center justify-center gap-2"><Zap className="w-4 h-4" />Generovat pohledy</button></div>)}
           {(currentPhase === 'generating-views' || currentPhase === 'views-ready') && (<div className="space-y-4"><div><div className="flex items-center justify-between mb-2"><h3 className="text-xs font-medium">2. Generované pohledy</h3>{currentPhase === 'generating-views' && <span className="text-[10px] text-neutral-400">{Math.round(progress.view)}%</span>}</div><div className="grid grid-cols-4 gap-2">{viewTypes.map(v => (<div key={v.id} className={`aspect-square rounded-sm border flex items-center justify-center ${generatedViews[v.id] ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-200 bg-neutral-50'}`}>{generatedViews[v.id] ? <div className="text-center"><Box className="w-6 h-6 text-neutral-600 mx-auto mb-0.5" /><span className="text-[9px] text-neutral-500">{v.label}</span></div> : <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />}</div>))}</div></div><button onClick={handleGenerate3D} disabled={currentPhase !== 'views-ready'} className="w-full py-2.5 bg-neutral-900 text-white text-sm rounded-sm hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 flex items-center justify-center gap-2"><Box className="w-4 h-4" />Generovat 3D model</button></div>)}
           {currentPhase === 'generating-3d' && (<div className="text-center py-10"><div className="w-12 h-12 border-4 border-neutral-200 border-t-neutral-900 rounded-full animate-spin mx-auto mb-3" /><h3 className="text-base font-medium mb-1">Generování 3D...</h3><p className="text-xs text-neutral-400 mb-3">Může trvat pár minut</p><div className="w-full max-w-xs mx-auto bg-neutral-100 rounded-full h-1.5"><div className="bg-neutral-900 h-1.5 rounded-full transition-all" style={{width:`${progress.model}%`}} /></div><span className="text-[10px] text-neutral-400 mt-1 block">{Math.round(progress.model)}%</span></div>)}
           {currentPhase === 'complete' && (<div className="space-y-4"><div className="text-center py-6"><div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3"><Check className="w-6 h-6 text-emerald-600" /></div><h3 className="text-base font-medium mb-1">Model vygenerován!</h3><p className="text-xs text-neutral-400">Připraven k exportu</p></div><div className="aspect-video bg-neutral-100 rounded-sm flex items-center justify-center"><div className="text-center"><Box className="w-12 h-12 text-neutral-400 mx-auto mb-1" /><span className="text-xs text-neutral-500">3D Preview</span></div></div><div className="flex gap-2"><button onClick={handleReset} className="flex-1 py-2.5 border border-neutral-200 text-neutral-600 text-sm rounded-sm hover:bg-neutral-50 flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4" />Nový</button><button className="flex-1 py-2.5 bg-neutral-900 text-white text-sm rounded-sm hover:bg-neutral-800 flex items-center justify-center gap-2"><Download className="w-4 h-4" />Export</button></div></div>)}
@@ -1163,7 +1163,7 @@ export default function App() {
             {maxScripts.map(s => (
               <div key={s.id} className="flex items-center justify-between p-3 border border-neutral-100 rounded-sm hover:border-neutral-200 transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className={`w-1.5 h-1.5 rounded-full ${s.installed ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
+                  <div className={`w-1.5 h-1.5 rounded-full ${s.installed ? 'bg-white' : 'bg-neutral-300'}`} />
                   <div>
                     <div className="text-sm font-medium text-neutral-900">{s.name}</div>
                     <div className="text-[10px] text-neutral-400">{s.description}</div>
