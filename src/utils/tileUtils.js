@@ -47,17 +47,18 @@ export const getTileBounds = (center, tileZoom, gridSize) => {
 
 /**
  * Get bounds centered exactly on the clicked point (no tile-snapping).
- * The rectangle spans gridSize tiles in width/height but is always
- * perfectly centered on the given center coordinate.
+ * The rectangle is always square (in tile units) and centered on the
+ * given coordinate, using tile dimensions at the actual latitude.
  */
 export const getCenteredBounds = (center, tileZoom, gridSize) => {
   if (!center) return null;
 
-  // Compute the geographic size of one tile at this zoom
-  const t0 = tile2deg(0, 0, tileZoom);
-  const t1 = tile2deg(1, 1, tileZoom);
-  const tileW = t1.lon - t0.lon;
-  const tileH = t0.lat - t1.lat; // lat decreases downward
+  // Measure tile size at the actual center latitude
+  const centerTile = deg2tile(center[0], center[1], tileZoom);
+  const tNW = tile2deg(centerTile.x, centerTile.y, tileZoom);
+  const tSE = tile2deg(centerTile.x + 1, centerTile.y + 1, tileZoom);
+  const tileW = tSE.lon - tNW.lon;
+  const tileH = tNW.lat - tSE.lat;
 
   const halfW = (gridSize / 2) * tileW;
   const halfH = (gridSize / 2) * tileH;
