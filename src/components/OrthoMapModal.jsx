@@ -3,8 +3,8 @@ import { Map, X, Download, MapPin, ChevronDown } from 'lucide-react';
 
 import { SelectionMap } from './MapComponents';
 import {
-  deg2tile,
-  getTileBounds,
+  getCenteredBounds,
+  getTilesForBounds,
   estimateFileSize,
   orthoSources,
   ORTHO_STORAGE_KEY
@@ -184,40 +184,28 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
     setDownloadProgress(0);
 
     try {
-      const centerTile = deg2tile(center[0], center[1], tileZoom);
-      const halfGrid = Math.floor(gridSize / 2);
+      const dlBounds = getCenteredBounds(center, tileZoom, gridSize);
+      const { tiles, cols, rows, originTile } = getTilesForBounds(dlBounds, tileZoom);
 
       const tileSize = 256;
-      const totalSize = gridSize * tileSize;
 
+      // Full canvas covering all intersected tiles
       const canvas = document.createElement('canvas');
-      canvas.width = totalSize;
-      canvas.height = totalSize;
+      canvas.width = cols * tileSize;
+      canvas.height = rows * tileSize;
       const ctx = canvas.getContext('2d');
-
-      const tiles = [];
-      for (let dy = -halfGrid; dy <= halfGrid; dy++) {
-        for (let dx = -halfGrid; dx <= halfGrid; dx++) {
-          tiles.push({
-            x: centerTile.x + dx,
-            y: centerTile.y + dy,
-            canvasX: (dx + halfGrid) * tileSize,
-            canvasY: (dy + halfGrid) * tileSize,
-          });
-        }
-      }
 
       const loadTile = (tile) => {
         return new Promise((resolve) => {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => {
-            ctx.drawImage(img, tile.canvasX, tile.canvasY, tileSize, tileSize);
+            ctx.drawImage(img, tile.gx * tileSize, tile.gy * tileSize, tileSize, tileSize);
             resolve(true);
           };
           img.onerror = () => {
             ctx.fillStyle = '#e5e5e5';
-            ctx.fillRect(tile.canvasX, tile.canvasY, tileSize, tileSize);
+            ctx.fillRect(tile.gx * tileSize, tile.gy * tileSize, tileSize, tileSize);
             resolve(false);
           };
           img.src = selectedSource.tileUrl(tileZoom, tile.x, tile.y);
@@ -235,6 +223,18 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
         setDownloadProgress((loaded / totalTiles) * 100);
       }
 
+      // Crop to exact bounds
+      const n = Math.pow(2, tileZoom);
+      const cropX = Math.round(((dlBounds[0][1] + 180) / 360 * n - originTile.x) * tileSize);
+      const cropY = Math.round(((1 - Math.log(Math.tan(dlBounds[0][0] * Math.PI / 180) + 1 / Math.cos(dlBounds[0][0] * Math.PI / 180)) / Math.PI) / 2 * n - originTile.y) * tileSize);
+      const cropX2 = Math.round(((dlBounds[1][1] + 180) / 360 * n - originTile.x) * tileSize);
+      const cropY2 = Math.round(((1 - Math.log(Math.tan(dlBounds[1][0] * Math.PI / 180) + 1 / Math.cos(dlBounds[1][0] * Math.PI / 180)) / Math.PI) / 2 * n - originTile.y) * tileSize);
+
+      const outputCanvas = document.createElement('canvas');
+      outputCanvas.width = cropX2 - cropX;
+      outputCanvas.height = cropY2 - cropY;
+      outputCanvas.getContext('2d').drawImage(canvas, cropX, cropY, cropX2 - cropX, cropY2 - cropY, 0, 0, outputCanvas.width, outputCanvas.height);
+
       // Generate smart filename
       const date = new Date();
       const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
@@ -243,7 +243,7 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
       const baseFilename = `ortho_${latStr}_${lonStr}_z${tileZoom}_${dateStr}`;
 
       // Export as JPG 85%
-      canvas.toBlob((blob) => {
+      outputCanvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.download = `${baseFilename}.jpg`;
@@ -685,7 +685,7 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
 
   if (!isOpen) return null;
 
-  const cropBounds = getTileBounds(center, tileZoom, gridSize);
+  const cropBounds = getCenteredBounds(center, tileZoom, gridSize);
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose} ref={modalRef}>
