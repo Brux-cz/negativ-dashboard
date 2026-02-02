@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Rectangle, Marker, Popup } from 'react-leaflet';
 import { Map, X, Download, MapPin, ChevronDown } from 'lucide-react';
 
-import { MapClickHandler, MapViewController, DarkOverlay, DimensionLabels, centerIcon } from './MapComponents';
+import { SelectionMap } from './MapComponents';
 import {
   deg2tile,
   getTileBounds,
@@ -55,7 +54,7 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
   const [customHeight, setCustomHeight] = useState(2048);
   const [showDetails, setShowDetails] = useState(false);
   const modalRef = useRef(null);
-  const mapContainerRef = useRef(null);
+
 
   const handleZoomChange = useCallback((zoom) => {
     setCurrentMapZoom(Math.round(zoom));
@@ -1440,45 +1439,15 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
         {/* Content */}
         <div className="flex flex-1 overflow-hidden">
           {/* Map */}
-          <div className="flex-1 relative" ref={mapContainerRef}>
-            <MapContainer
-              center={mapView}
-              zoom={mapZoom}
-              className="h-full w-full"
-            >
-              <TileLayer url={selectedSource.url} maxZoom={21} />
-              <MapClickHandler onMapClick={handleMapClick} onZoomChange={handleZoomChange} />
-              <MapViewController center={mapView} zoom={mapZoom} />
-              <DarkOverlay bounds={cropBounds} />
-
-              {center && (
-                <Marker position={center} icon={centerIcon}>
-                  <Popup>
-                    <div className="text-sm">
-                      <div className="font-medium">Střed výřezu</div>
-                      <div className="font-mono text-neutral-500">
-                        {center[0].toFixed(6)}, {center[1].toFixed(6)}
-                      </div>
-                    </div>
-                  </Popup>
-                </Marker>
-              )}
-
-              {cropBounds && (
-                <Rectangle
-                  bounds={cropBounds}
-                  pathOptions={{
-                    color: '#ffffff',
-                    weight: 2,
-                    fillColor: 'transparent',
-                    fillOpacity: 0,
-                  }}
-                />
-              )}
-
-              <DimensionLabels bounds={cropBounds} portalContainer={mapContainerRef.current} />
-            </MapContainer>
-
+          <SelectionMap
+            mapView={mapView}
+            mapZoom={mapZoom}
+            tileUrl={selectedSource.url}
+            bounds={cropBounds}
+            center={center}
+            onMapClick={handleMapClick}
+            onZoomChange={handleZoomChange}
+          >
             {/* Zoom indicator */}
             <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-sm px-3 py-2 rounded-lg">
               <div className="text-sm font-mono font-bold text-white">Zoom: {currentMapZoom}</div>
@@ -1503,7 +1472,7 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
                 </span>
               </div>
             </div>
-          </div>
+          </SelectionMap>
 
           {/* Sidebar - Dark Mode */}
           <div className="w-96 bg-neutral-800 border-l border-neutral-700 overflow-y-auto shrink-0">
