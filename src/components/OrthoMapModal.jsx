@@ -132,7 +132,6 @@ export const OrthoMapModal = ({ isOpen, onClose, shiftHeld = false }) => {
 
   const handleMapClick = useCallback((latlng) => {
     setCenter(latlng);
-    setMapView(latlng);
   }, []);
 
   // Real geocoding search using Nominatim

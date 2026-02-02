@@ -20,6 +20,7 @@ export const MapClickHandler = ({ onMapClick, onZoomChange }) => {
   useMapEvents({
     click(e) {
       onMapClick([e.latlng.lat, e.latlng.lng]);
+      map.panTo(e.latlng);
     },
     zoomend() {
       onZoomChange(map.getZoom());
