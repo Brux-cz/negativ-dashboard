@@ -44,3 +44,51 @@ export const getTileBounds = (center, tileZoom, gridSize) => {
 
   return [[topLeft.lat, topLeft.lon], [bottomRight.lat, bottomRight.lon]];
 };
+
+/**
+ * Get bounds centered exactly on the clicked point (no tile-snapping).
+ * The rectangle spans gridSize tiles in width/height but is always
+ * perfectly centered on the given center coordinate.
+ */
+export const getCenteredBounds = (center, tileZoom, gridSize) => {
+  if (!center) return null;
+
+  // Compute the geographic size of one tile at this zoom
+  const t0 = tile2deg(0, 0, tileZoom);
+  const t1 = tile2deg(1, 1, tileZoom);
+  const tileW = t1.lon - t0.lon;
+  const tileH = t0.lat - t1.lat; // lat decreases downward
+
+  const halfW = (gridSize / 2) * tileW;
+  const halfH = (gridSize / 2) * tileH;
+
+  return [
+    [center[0] + halfH, center[1] - halfW], // NW
+    [center[0] - halfH, center[1] + halfW], // SE
+  ];
+};
+
+/**
+ * Get all tiles that intersect the given geographic bounds.
+ * Returns tiles sorted top-left to bottom-right with their
+ * grid position (gx, gy) for canvas placement.
+ */
+export const getTilesForBounds = (bounds, tileZoom) => {
+  const [[nLat, wLon], [sLat, eLon]] = bounds;
+  const nw = deg2tile(nLat, wLon, tileZoom);
+  const se = deg2tile(sLat, eLon, tileZoom);
+
+  const tiles = [];
+  for (let y = nw.y; y <= se.y; y++) {
+    for (let x = nw.x; x <= se.x; x++) {
+      tiles.push({ x, y, gx: x - nw.x, gy: y - nw.y });
+    }
+  }
+
+  return {
+    tiles,
+    cols: se.x - nw.x + 1,
+    rows: se.y - nw.y + 1,
+    originTile: nw, // top-left tile
+  };
+};

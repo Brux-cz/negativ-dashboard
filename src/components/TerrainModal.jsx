@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Mountain, X, Download, MapPin, ChevronDown } from 'lucide-react';
 
 import { SelectionMap } from './MapComponents';
-import { deg2tile, tile2deg, getDistanceMeters, formatDistance, elevationSource, orthoSources, TERRAIN_STORAGE_KEY } from '../utils';
+import { getCenteredBounds, getTilesForBounds, getDistanceMeters, formatDistance, elevationSource, orthoSources, TERRAIN_STORAGE_KEY } from '../utils';
 
 /**
  * Generate OBJ mesh from heightmap data
@@ -219,52 +219,31 @@ export const TerrainModal = ({ isOpen, onClose }) => {
     setDownloadProgress(0);
 
     try {
-      const centerTile = deg2tile(center[0], center[1], tileZoom);
-      const halfGrid = Math.floor(gridSize / 2);
+      // Bounds centered exactly on clicked point
+      const dlBounds = getCenteredBounds(center, tileZoom, gridSize);
+      const { tiles, cols, rows, originTile } = getTilesForBounds(dlBounds, tileZoom);
 
-      // Calculate bounds
-      const startX = centerTile.x - halfGrid;
-      const startY = centerTile.y - halfGrid;
-      const endX = startX + gridSize;
-      const endY = startY + gridSize;
-
-      const topLeft = tile2deg(startX, startY, tileZoom);
-      const bottomRight = tile2deg(endX, endY, tileZoom);
-      const bounds = [[topLeft.lat, topLeft.lon], [bottomRight.lat, bottomRight.lon]];
-
-      // Create canvas for elevation tiles
+      // Create canvas for all tiles that intersect the bounds
       const tileSize = 256;
-      const totalTiles = gridSize * gridSize;
+      const totalTiles = tiles.length;
       const canvas = document.createElement('canvas');
-      canvas.width = gridSize * tileSize;
-      canvas.height = gridSize * tileSize;
+      canvas.width = cols * tileSize;
+      canvas.height = rows * tileSize;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
       // Load elevation tiles
-      const tiles = [];
-      for (let dy = 0; dy < gridSize; dy++) {
-        for (let dx = 0; dx < gridSize; dx++) {
-          tiles.push({
-            x: startX + dx,
-            y: startY + dy,
-            canvasX: dx * tileSize,
-            canvasY: dy * tileSize,
-          });
-        }
-      }
-
       let loaded = 0;
       for (const tile of tiles) {
         await new Promise((resolve) => {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => {
-            ctx.drawImage(img, tile.canvasX, tile.canvasY, tileSize, tileSize);
+            ctx.drawImage(img, tile.gx * tileSize, tile.gy * tileSize, tileSize, tileSize);
             resolve(true);
           };
           img.onerror = () => {
-            ctx.fillStyle = '#808080'; // Mid-gray for missing tiles
-            ctx.fillRect(tile.canvasX, tile.canvasY, tileSize, tileSize);
+            ctx.fillStyle = '#808080';
+            ctx.fillRect(tile.gx * tileSize, tile.gy * tileSize, tileSize, tileSize);
             resolve(false);
           };
           img.src = elevationSource.tileUrl(tileZoom, tile.x, tile.y);
@@ -273,13 +252,26 @@ export const TerrainModal = ({ isOpen, onClose }) => {
         setDownloadProgress((loaded / totalTiles) * 50);
       }
 
-      // Resample to desired mesh resolution
+      // Calculate pixel crop region within the full tile canvas
+      // Convert bounds corners to fractional tile coordinates, then to pixels
+      const n = Math.pow(2, tileZoom);
+      const nwPixelX = ((dlBounds[0][1] + 180) / 360 * n - originTile.x) * tileSize;
+      const nwPixelY = ((1 - Math.log(Math.tan(dlBounds[0][0] * Math.PI / 180) + 1 / Math.cos(dlBounds[0][0] * Math.PI / 180)) / Math.PI) / 2 * n - originTile.y) * tileSize;
+      const sePixelX = ((dlBounds[1][1] + 180) / 360 * n - originTile.x) * tileSize;
+      const sePixelY = ((1 - Math.log(Math.tan(dlBounds[1][0] * Math.PI / 180) + 1 / Math.cos(dlBounds[1][0] * Math.PI / 180)) / Math.PI) / 2 * n - originTile.y) * tileSize;
+
+      const cropX = Math.round(nwPixelX);
+      const cropY = Math.round(nwPixelY);
+      const cropW = Math.round(sePixelX - nwPixelX);
+      const cropH = Math.round(sePixelY - nwPixelY);
+
+      // Resample cropped region to desired mesh resolution
       const outputSize = meshResolution;
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(cropX, cropY, cropW, cropH);
       const heightData = new Float32Array(outputSize * outputSize);
 
-      const scaleX = canvas.width / outputSize;
-      const scaleY = canvas.height / outputSize;
+      const scaleX = cropW / outputSize;
+      const scaleY = cropH / outputSize;
 
       let minHeight = Infinity;
       let maxHeight = -Infinity;
@@ -288,7 +280,7 @@ export const TerrainModal = ({ isOpen, onClose }) => {
         for (let x = 0; x < outputSize; x++) {
           const srcX = Math.floor(x * scaleX);
           const srcY = Math.floor(y * scaleY);
-          const idx = (srcY * canvas.width + srcX) * 4;
+          const idx = (srcY * cropW + srcX) * 4;
 
           const r = imageData.data[idx];
           const g = imageData.data[idx + 1];
@@ -318,7 +310,7 @@ export const TerrainModal = ({ isOpen, onClose }) => {
       const baseFilename = `terrain_${latStr}_${lonStr}_z${tileZoom}_${dateStr}`;
 
       // Generate and download OBJ
-      const objContent = generateOBJMesh(heightData, outputSize, outputSize, bounds, verticalScale);
+      const objContent = generateOBJMesh(heightData, outputSize, outputSize, dlBounds, verticalScale);
       const objBlob = new Blob([objContent], { type: 'text/plain' });
       const objUrl = URL.createObjectURL(objBlob);
       const objLink = document.createElement('a');
@@ -331,51 +323,45 @@ export const TerrainModal = ({ isOpen, onClose }) => {
 
       // Generate texture if requested
       if (generateTexture) {
-        const textureCanvas = document.createElement('canvas');
-        const textureSize = meshResolution * 2; // Higher res texture
-        textureCanvas.width = textureSize;
-        textureCanvas.height = textureSize;
-        const textureCtx = textureCanvas.getContext('2d');
-
         const textureTileZoom = Math.min(tileZoom + 2, 19);
-        const textureCenterTile = deg2tile(center[0], center[1], textureTileZoom);
-        const textureHalfGrid = Math.floor(gridSize * 2);
+        const { tiles: texTileList, cols: texCols, rows: texRows, originTile: texOrigin } = getTilesForBounds(dlBounds, textureTileZoom);
+
+        const texTileSize = 256;
+        const texFullCanvas = document.createElement('canvas');
+        texFullCanvas.width = texCols * texTileSize;
+        texFullCanvas.height = texRows * texTileSize;
+        const texFullCtx = texFullCanvas.getContext('2d');
 
         const textureUrl = textureSource === 'google'
           ? (z, x, y) => `https://mt1.google.com/vt/lyrs=s&x=${x}&y=${y}&z=${z}`
           : (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
 
-        // Simple texture - just download center area
-        const texTiles = [];
-        for (let dy = -textureHalfGrid; dy < textureHalfGrid; dy++) {
-          for (let dx = -textureHalfGrid; dx < textureHalfGrid; dx++) {
-            const texX = (dx + textureHalfGrid) / (textureHalfGrid * 2) * textureSize;
-            const texY = (dy + textureHalfGrid) / (textureHalfGrid * 2) * textureSize;
-            texTiles.push({
-              x: textureCenterTile.x + dx,
-              y: textureCenterTile.y + dy,
-              canvasX: texX,
-              canvasY: texY,
-              size: textureSize / (textureHalfGrid * 2),
-            });
-          }
-        }
-
-        // Load first few texture tiles (limit for performance)
-        const maxTexTiles = Math.min(texTiles.length, 16);
-        for (let i = 0; i < maxTexTiles; i++) {
-          const tile = texTiles[i];
+        for (const tile of texTileList) {
           await new Promise((resolve) => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
             img.onload = () => {
-              textureCtx.drawImage(img, tile.canvasX, tile.canvasY, tile.size, tile.size);
+              texFullCtx.drawImage(img, tile.gx * texTileSize, tile.gy * texTileSize, texTileSize, texTileSize);
               resolve(true);
             };
             img.onerror = () => resolve(false);
             img.src = textureUrl(textureTileZoom, tile.x, tile.y);
           });
         }
+
+        // Crop texture to exact bounds
+        const texN = Math.pow(2, textureTileZoom);
+        const texCropX = Math.round(((dlBounds[0][1] + 180) / 360 * texN - texOrigin.x) * texTileSize);
+        const texCropY = Math.round(((1 - Math.log(Math.tan(dlBounds[0][0] * Math.PI / 180) + 1 / Math.cos(dlBounds[0][0] * Math.PI / 180)) / Math.PI) / 2 * texN - texOrigin.y) * texTileSize);
+        const texCropX2 = Math.round(((dlBounds[1][1] + 180) / 360 * texN - texOrigin.x) * texTileSize);
+        const texCropY2 = Math.round(((1 - Math.log(Math.tan(dlBounds[1][0] * Math.PI / 180) + 1 / Math.cos(dlBounds[1][0] * Math.PI / 180)) / Math.PI) / 2 * texN - texOrigin.y) * texTileSize);
+
+        const textureSize = meshResolution * 2;
+        const textureCanvas = document.createElement('canvas');
+        textureCanvas.width = textureSize;
+        textureCanvas.height = textureSize;
+        const textureCtx = textureCanvas.getContext('2d');
+        textureCtx.drawImage(texFullCanvas, texCropX, texCropY, texCropX2 - texCropX, texCropY2 - texCropY, 0, 0, textureSize, textureSize);
 
         textureCanvas.toBlob((blob) => {
           const texUrl = URL.createObjectURL(blob);
@@ -403,19 +389,8 @@ export const TerrainModal = ({ isOpen, onClose }) => {
     }
   };
 
-  // Calculate bounds for display
-  const bounds = useMemo(() => {
-    if (!center) return null;
-    const centerTile = deg2tile(center[0], center[1], tileZoom);
-    const halfGrid = Math.floor(gridSize / 2);
-    const startX = centerTile.x - halfGrid;
-    const startY = centerTile.y - halfGrid;
-    const endX = startX + gridSize;
-    const endY = startY + gridSize;
-    const topLeft = tile2deg(startX, startY, tileZoom);
-    const bottomRight = tile2deg(endX, endY, tileZoom);
-    return [[topLeft.lat, topLeft.lon], [bottomRight.lat, bottomRight.lon]];
-  }, [center, tileZoom, gridSize]);
+  // Calculate bounds centered exactly on clicked point
+  const bounds = getCenteredBounds(center, tileZoom, gridSize);
 
   // Keyboard shortcuts
   useEffect(() => {
