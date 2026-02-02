@@ -169,7 +169,6 @@ export const TerrainModal = ({ isOpen, onClose }) => {
 
   const handleMapClick = useCallback((latlng) => {
     setCenter(latlng);
-    setMapView(latlng);
   }, []);
 
   // Search
