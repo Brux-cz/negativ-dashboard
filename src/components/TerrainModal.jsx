@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Rectangle, Marker, Popup } from 'react-leaflet';
-import { Mountain, X, Download, MapPin } from 'lucide-react';
+import { Mountain, X, Download, MapPin, ChevronDown } from 'lucide-react';
 
 import { MapClickHandler, MapViewController, DarkOverlay, DimensionLabels, centerIcon } from './MapComponents';
-import { deg2tile, tile2deg, getDistanceMeters, formatDistance, elevationSource, TERRAIN_STORAGE_KEY } from '../utils';
+import { deg2tile, tile2deg, getDistanceMeters, formatDistance, elevationSource, orthoSources, TERRAIN_STORAGE_KEY } from '../utils';
 
 /**
  * Generate OBJ mesh from heightmap data
@@ -99,6 +99,9 @@ export const TerrainModal = ({ isOpen, onClose }) => {
 
   const savedSettings = loadSettings();
 
+  const [selectedSource, setSelectedSource] = useState(
+    orthoSources.find(s => s.id === savedSettings?.sourceId) || orthoSources[0]
+  );
   const [center, setCenter] = useState(savedSettings?.center || null);
   const [mapView, setMapView] = useState(savedSettings?.mapView || [50.0755, 14.4378]);
   const [mapZoom, setMapZoom] = useState(savedSettings?.mapZoom || 14);
@@ -115,6 +118,7 @@ export const TerrainModal = ({ isOpen, onClose }) => {
   const [exportFormat, setExportFormat] = useState(savedSettings?.exportFormat || 'obj');
   const [generateTexture, setGenerateTexture] = useState(savedSettings?.generateTexture ?? true);
   const [textureSource, setTextureSource] = useState(savedSettings?.textureSource || 'google');
+  const [showDetails, setShowDetails] = useState(false);
 
   const modalRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -126,6 +130,7 @@ export const TerrainModal = ({ isOpen, onClose }) => {
   // Save settings
   useEffect(() => {
     const settings = {
+      sourceId: selectedSource.id,
       center,
       mapView,
       mapZoom,
@@ -138,7 +143,7 @@ export const TerrainModal = ({ isOpen, onClose }) => {
       textureSource,
     };
     localStorage.setItem(TERRAIN_STORAGE_KEY, JSON.stringify(settings));
-  }, [center, mapView, mapZoom, tileZoom, gridSize, verticalScale, meshResolution, exportFormat, generateTexture, textureSource]);
+  }, [selectedSource, center, mapView, mapZoom, tileZoom, gridSize, verticalScale, meshResolution, exportFormat, generateTexture, textureSource]);
 
   // Grid and zoom options
   const gridSizes = [
@@ -414,15 +419,36 @@ export const TerrainModal = ({ isOpen, onClose }) => {
     return [[topLeft.lat, topLeft.lon], [bottomRight.lat, bottomRight.lon]];
   }, [center, tileZoom, gridSize]);
 
-  // Escape to close
+  // Keyboard shortcuts
   useEffect(() => {
     if (!isOpen) return;
+
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
+      // Don't trigger if typing in input
+      if (e.target.tagName === 'INPUT') return;
+
+      switch (e.key) {
+        case '+':
+        case '=':
+          setTileZoom(z => Math.min(14, z + 1));
+          break;
+        case '-':
+          setTileZoom(z => Math.max(10, z - 1));
+          break;
+        case 'Enter':
+          if (center && !downloading) {
+            handleDownload();
+          }
+          break;
+        case 'Escape':
+          onClose();
+          break;
+      }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, center, downloading, onClose]);
 
   if (!isOpen) return null;
 
@@ -430,21 +456,21 @@ export const TerrainModal = ({ isOpen, onClose }) => {
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
         ref={modalRef}
-        className="bg-neutral-900 rounded-lg w-full max-w-6xl h-[85vh] shadow-2xl overflow-hidden flex flex-col"
+        className="bg-neutral-900 rounded-lg w-full h-full shadow-2xl overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between flex-shrink-0">
+        <div className="px-5 py-4 border-b border-neutral-700 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-neutral-800 rounded-lg flex items-center justify-center">
-              <Mountain className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+              <Mountain className="w-5 h-5 text-neutral-900" />
             </div>
             <div>
-              <h2 className="text-base font-medium text-white">3D Terrain</h2>
-              <p className="text-xs text-neutral-500">SRTM Elevation Data → OBJ Mesh</p>
+              <h2 className="text-lg font-semibold text-white">3D Terrain</h2>
+              <p className="text-sm text-neutral-400">SRTM Elevation Data → OBJ Mesh • <span className="text-neutral-500">ESC zavřít, +/- zoom, Enter stáhnout</span></p>
             </div>
           </div>
-          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-neutral-400 hover:text-white p-2 hover:bg-neutral-800 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -459,10 +485,7 @@ export const TerrainModal = ({ isOpen, onClose }) => {
               className="w-full h-full"
               zoomControl={false}
             >
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution=""
-              />
+              <TileLayer url={selectedSource.url} maxZoom={21} />
               <MapClickHandler onMapClick={handleMapClick} onZoomChange={handleZoomChange} />
               <MapViewController center={mapView} zoom={mapZoom} />
 
@@ -471,10 +494,10 @@ export const TerrainModal = ({ isOpen, onClose }) => {
                   <Rectangle
                     bounds={bounds}
                     pathOptions={{
-                      color: '#f97316',
+                      color: '#ffffff',
                       weight: 2,
-                      fillColor: '#f97316',
-                      fillOpacity: 0.1,
+                      fillColor: 'transparent',
+                      fillOpacity: 0,
                     }}
                   />
                   <DarkOverlay bounds={bounds} />
@@ -485,53 +508,16 @@ export const TerrainModal = ({ isOpen, onClose }) => {
               {center && (
                 <Marker position={center} icon={centerIcon}>
                   <Popup>
-                    <div className="text-xs">
-                      <div className="font-medium">Střed výběru</div>
-                      <div className="text-neutral-500">
-                        {center[0].toFixed(5)}, {center[1].toFixed(5)}
+                    <div className="text-sm">
+                      <div className="font-medium">Střed výřezu</div>
+                      <div className="font-mono text-neutral-500">
+                        {center[0].toFixed(6)}, {center[1].toFixed(6)}
                       </div>
                     </div>
                   </Popup>
                 </Marker>
               )}
             </MapContainer>
-
-            {/* Search overlay */}
-            <div className="absolute top-4 left-4 right-4 z-[1000]">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  placeholder="Hledat místo nebo zadat souřadnice..."
-                  className="w-full max-w-md px-4 py-2.5 pl-10 bg-white/95 backdrop-blur rounded-lg text-sm text-neutral-900 placeholder-neutral-400 shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                {searching && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-neutral-300 border-t-orange-500 rounded-full animate-spin" />
-                  </div>
-                )}
-              </div>
-
-              {searchResults.length > 0 && (
-                <div className="mt-2 bg-white/95 backdrop-blur rounded-lg shadow-lg overflow-hidden max-w-md">
-                  {searchResults.map((result, i) => (
-                    <button
-                      key={i}
-                      onClick={() => selectSearchResult(result)}
-                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-neutral-100 border-b border-neutral-100 last:border-0"
-                    >
-                      <div className="text-neutral-900 truncate">{result.name}</div>
-                      <div className="text-xs text-neutral-400">
-                        {result.lat.toFixed(4)}, {result.lon.toFixed(4)}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* Zoom info */}
             <div className="absolute bottom-4 left-4 z-[1000] bg-black/70 text-white text-xs px-2 py-1 rounded">
@@ -540,52 +526,120 @@ export const TerrainModal = ({ isOpen, onClose }) => {
           </div>
 
           {/* Sidebar */}
-          <div className="w-80 bg-neutral-900 border-l border-neutral-800 flex flex-col overflow-y-auto">
-            <div className="p-4 space-y-5">
-              {/* Source info */}
+          <div className="w-96 bg-neutral-800 border-l border-neutral-700 flex flex-col overflow-y-auto">
+            <div className="p-5 space-y-6">
+              {/* Search */}
               <div>
-                <label className="block text-xs text-neutral-500 mb-2">Zdroj dat</label>
-                <div className="bg-neutral-800 rounded-lg p-3">
-                  <div className="text-sm text-white font-medium">{elevationSource.name}</div>
-                  <div className="text-xs text-neutral-400 mt-1">{elevationSource.attribution}</div>
-                  <div className="text-[10px] text-orange-400 mt-2">
-                    * Bezplatný zdroj bez API klíče
-                  </div>
+                <label className="text-sm font-medium text-neutral-300 mb-2 block">
+                  Hledat místo
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                    placeholder="Adresa nebo 50.0755, 14.4378"
+                    className="flex-1 px-3 py-2.5 text-sm bg-neutral-700 border border-neutral-600 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:border-white focus:ring-1 focus:ring-white"
+                  />
+                  <button
+                    onClick={handleSearch}
+                    disabled={searching}
+                    className="px-3 py-2.5 bg-white text-neutral-900 rounded-lg hover:bg-neutral-200 disabled:bg-neutral-600 transition-colors"
+                  >
+                    {searching ? '...' : <MapPin className="w-4 h-4" />}
+                  </button>
                 </div>
+                {searchResults.length > 0 && (
+                  <div className="mt-2 bg-neutral-700 border border-neutral-600 rounded-lg max-h-48 overflow-y-auto">
+                    {searchResults.map((result, i) => (
+                      <button key={i} onClick={() => selectSearchResult(result)}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-neutral-600 border-b border-neutral-600 last:border-0">
+                        <div className="truncate text-white">{result.name}</div>
+                        <div className="text-xs font-mono text-neutral-400">
+                          {result.lat.toFixed(5)}, {result.lon.toFixed(5)}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Tile zoom */}
+              {/* Map Source */}
               <div>
-                <label className="block text-xs text-neutral-500 mb-2">Detail terénu</label>
-                <div className="grid grid-cols-3 gap-1">
-                  {terrainZooms.map(z => (
+                <label className="text-sm font-medium text-neutral-300 mb-2 block">Zdroj mapy</label>
+                <div className="flex gap-2">
+                  {orthoSources.map(source => (
                     <button
-                      key={z.value}
-                      onClick={() => setTileZoom(z.value)}
-                      className={`px-2 py-1.5 text-xs rounded ${
-                        tileZoom === z.value
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                      key={source.id}
+                      onClick={() => setSelectedSource(source)}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                        selectedSource.id === source.id
+                          ? 'bg-white text-neutral-900'
+                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                       }`}
                     >
-                      z{z.value}
+                      {source.name}
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Source info */}
+              <div>
+                <label className="text-sm font-medium text-neutral-300 mb-2 block">Zdroj výškových dat</label>
+                <div className="bg-neutral-700/50 rounded-lg p-3">
+                  <div className="text-sm text-white font-medium">{elevationSource.name}</div>
+                  <div className="text-xs text-neutral-400 mt-1">{elevationSource.attribution}</div>
+                  <div className="text-[10px] text-neutral-500 mt-2">
+                    * Bezplatný zdroj bez API klíče
+                  </div>
+                </div>
+              </div>
+
+              {/* Tile zoom - Slider */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-neutral-300">
+                    Detail terénu (zoom)
+                  </label>
+                  <span className="text-sm font-mono text-white">{tileZoom}</span>
+                </div>
+                <input
+                  type="range"
+                  min={10}
+                  max={14}
+                  value={tileZoom}
+                  onChange={e => setTileZoom(parseInt(e.target.value))}
+                  className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-white"
+                />
+                <div className="flex justify-between text-xs text-neutral-500 mt-1">
+                  <span>10</span>
+                  <span>11</span>
+                  <span>12</span>
+                  <span>13</span>
+                  <span>14</span>
+                </div>
+                <button
+                  onClick={() => setTileZoom(Math.min(14, Math.max(10, currentMapZoom)))}
+                  className="text-xs text-white hover:text-neutral-300 mt-2"
+                >
+                  Použít aktuální zoom mapy ({currentMapZoom})
+                </button>
+              </div>
+
               {/* Grid size */}
               <div>
-                <label className="block text-xs text-neutral-500 mb-2">Velikost oblasti</label>
-                <div className="grid grid-cols-4 gap-1">
+                <label className="text-sm font-medium text-neutral-300 mb-2 block">Velikost oblasti</label>
+                <div className="grid grid-cols-4 gap-2">
                   {gridSizes.map(g => (
                     <button
                       key={g.value}
                       onClick={() => setGridSize(g.value)}
-                      className={`px-2 py-1.5 text-xs rounded ${
+                      className={`py-2.5 text-sm font-medium rounded-lg transition-all ${
                         gridSize === g.value
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                          ? 'bg-white text-neutral-900'
+                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                       }`}
                     >
                       {g.label}
@@ -596,16 +650,16 @@ export const TerrainModal = ({ isOpen, onClose }) => {
 
               {/* Mesh resolution */}
               <div>
-                <label className="block text-xs text-neutral-500 mb-2">Rozlišení mesh</label>
-                <div className="grid grid-cols-3 gap-1">
+                <label className="text-sm font-medium text-neutral-300 mb-2 block">Rozlišení mesh</label>
+                <div className="grid grid-cols-3 gap-2">
                   {meshResolutions.map(r => (
                     <button
                       key={r.value}
                       onClick={() => setMeshResolution(r.value)}
-                      className={`px-2 py-1.5 text-xs rounded ${
+                      className={`py-2.5 text-sm font-medium rounded-lg transition-all ${
                         meshResolution === r.value
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                          ? 'bg-white text-neutral-900'
+                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                       }`}
                     >
                       {r.label}
@@ -616,9 +670,12 @@ export const TerrainModal = ({ isOpen, onClose }) => {
 
               {/* Vertical scale */}
               <div>
-                <label className="block text-xs text-neutral-500 mb-2">
-                  Vertikální měřítko: {verticalScale}×
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-neutral-300">
+                    Vertikální měřítko
+                  </label>
+                  <span className="text-sm font-mono text-white">{verticalScale}×</span>
+                </div>
                 <input
                   type="range"
                   min="0.5"
@@ -626,9 +683,9 @@ export const TerrainModal = ({ isOpen, onClose }) => {
                   step="0.5"
                   value={verticalScale}
                   onChange={(e) => setVerticalScale(parseFloat(e.target.value))}
-                  className="w-full accent-orange-500"
+                  className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-white"
                 />
-                <div className="flex justify-between text-[10px] text-neutral-500 mt-1">
+                <div className="flex justify-between text-xs text-neutral-500 mt-1">
                   <span>0.5×</span>
                   <span>1× (reálné)</span>
                   <span>5×</span>
@@ -637,33 +694,35 @@ export const TerrainModal = ({ isOpen, onClose }) => {
 
               {/* Texture option */}
               <div>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer mb-3">
                   <input
                     type="checkbox"
                     checked={generateTexture}
                     onChange={(e) => setGenerateTexture(e.target.checked)}
-                    className="w-4 h-4 rounded border-neutral-600 bg-neutral-800 text-orange-500 focus:ring-orange-500"
+                    className="w-4 h-4 rounded border-neutral-600 bg-neutral-700 text-white focus:ring-white"
                   />
-                  <span className="text-sm text-white">Stáhnout ortho texturu</span>
+                  <span className="text-sm font-medium text-neutral-300">
+                    Stáhnout ortho texturu
+                  </span>
                 </label>
                 {generateTexture && (
-                  <div className="mt-2 ml-6 flex gap-2">
+                  <div className="flex gap-2 pl-6">
                     <button
                       onClick={() => setTextureSource('google')}
-                      className={`px-2 py-1 text-xs rounded ${
+                      className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${
                         textureSource === 'google'
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-neutral-800 text-neutral-400'
+                          ? 'bg-white text-neutral-900'
+                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                       }`}
                     >
                       Google
                     </button>
                     <button
                       onClick={() => setTextureSource('esri')}
-                      className={`px-2 py-1 text-xs rounded ${
+                      className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${
                         textureSource === 'esri'
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-neutral-800 text-neutral-400'
+                          ? 'bg-white text-neutral-900'
+                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
                       }`}
                     >
                       Esri
@@ -672,46 +731,75 @@ export const TerrainModal = ({ isOpen, onClose }) => {
                 )}
               </div>
 
-              {/* Bounds info */}
-              {center && bounds && (
-                <div className="bg-neutral-800/50 rounded-lg p-3">
-                  <div className="text-xs text-neutral-500 mb-2">Vybraná oblast</div>
-                  <div className="text-sm text-white font-mono">
-                    {center[0].toFixed(4)}, {center[1].toFixed(4)}
+              {/* Details - Collapsible */}
+              <div>
+                <button
+                  onClick={() => setShowDetails(!showDetails)}
+                  className="w-full flex items-center justify-between text-sm font-medium text-neutral-300 hover:text-white transition-colors"
+                >
+                  <span>Detaily mesh</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showDetails ? 'rotate-180' : ''}`} />
+                </button>
+                {showDetails && (
+                  <div className="mt-3 bg-neutral-700/50 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-400">Rozlišení:</span>
+                      <span className="font-mono text-white">{meshResolution} × {meshResolution}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-400">Grid:</span>
+                      <span className="font-mono text-white">{gridSize} × {gridSize} tiles</span>
+                    </div>
+                    {bounds && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-neutral-400">Oblast:</span>
+                        <span className="font-mono text-white">
+                          {formatDistance(getDistanceMeters(bounds[0][0], bounds[0][1], bounds[0][0], bounds[1][1]))} × {formatDistance(getDistanceMeters(bounds[0][0], bounds[0][1], bounds[1][0], bounds[0][1]))}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-400">Vertikální měřítko:</span>
+                      <span className="font-mono text-white">{verticalScale}×</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-neutral-400">Formát:</span>
+                      <span className="font-mono text-white">
+                        OBJ {generateTexture ? '+ JPG texture' : ''}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs text-neutral-400 mt-1">
-                    ~{formatDistance(getDistanceMeters(bounds[0][0], bounds[0][1], bounds[0][0], bounds[1][1]))} × {formatDistance(getDistanceMeters(bounds[0][0], bounds[0][1], bounds[1][0], bounds[0][1]))}
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Download button */}
-              <div className="pt-2">
+              <div className="pt-4 border-t border-neutral-700">
                 {downloading ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-neutral-400">
-                      <span>Generuji mesh...</span>
-                      <span>{Math.round(downloadProgress)}%</span>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-300 flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Generuji mesh...
+                      </span>
+                      <span className="font-mono text-white">{Math.round(downloadProgress)}%</span>
                     </div>
-                    <div className="w-full bg-neutral-800 rounded-full h-2">
-                      <div
-                        className="bg-orange-500 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${downloadProgress}%` }}
-                      />
+                    <div className="w-full bg-neutral-700 rounded-full h-2">
+                      <div className="bg-white h-2 rounded-full transition-all"
+                           style={{ width: `${downloadProgress}%` }} />
                     </div>
                   </div>
                 ) : (
                   <button
                     onClick={handleDownload}
                     disabled={!center}
-                    className="w-full py-3 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 disabled:bg-neutral-700 disabled:text-neutral-500 flex items-center justify-center gap-2 transition-colors"
+                    className="w-full py-3.5 bg-white text-neutral-900 text-sm font-semibold rounded-lg hover:bg-neutral-200 disabled:bg-neutral-700 disabled:text-neutral-500 flex items-center justify-center gap-2 transition-colors"
                   >
-                    <Download className="w-4 h-4" />
+                    <Download className="w-5 h-5" />
                     Stáhnout OBJ Mesh
                   </button>
                 )}
                 {!center && (
-                  <p className="text-xs text-neutral-500 text-center mt-2">
+                  <p className="text-sm text-neutral-500 text-center mt-3">
                     Klikni na mapu pro výběr oblasti
                   </p>
                 )}
