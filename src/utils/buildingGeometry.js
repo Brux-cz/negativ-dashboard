@@ -55,8 +55,9 @@ export const generateBuildingMeshData = (buildings, terrain, verticalScale = 1) 
     }
     avgTerrainH /= localPoly.length;
 
+    // Building height is relative to terrain, not absolute
     const baseZ = avgTerrainH + building.minHeight;
-    const topZ = avgTerrainH + building.height;
+    const topZ = baseZ + (building.height - building.minHeight);
 
     // Triangulate the polygon for top/bottom caps
     const flatCoords = [];
