@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Rectangle, Marker, Popup } from 'react-leaflet';
 import { Mountain, X, Download, MapPin, ChevronDown } from 'lucide-react';
 
-import { MapClickHandler, MapViewController, DarkOverlay, DimensionLabels, centerIcon } from './MapComponents';
+import { SelectionMap } from './MapComponents';
 import { deg2tile, tile2deg, getDistanceMeters, formatDistance, elevationSource, orthoSources, TERRAIN_STORAGE_KEY } from '../utils';
 
 /**
@@ -121,7 +120,6 @@ export const TerrainModal = ({ isOpen, onClose }) => {
   const [showDetails, setShowDetails] = useState(false);
 
   const modalRef = useRef(null);
-  const mapContainerRef = useRef(null);
 
   const handleZoomChange = useCallback((zoom) => {
     setCurrentMapZoom(Math.round(zoom));
@@ -478,52 +476,19 @@ export const TerrainModal = ({ isOpen, onClose }) => {
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Map */}
-          <div className="flex-1 relative" ref={mapContainerRef}>
-            <MapContainer
-              center={mapView}
-              zoom={mapZoom}
-              className="w-full h-full"
-              zoomControl={false}
-            >
-              <TileLayer url={selectedSource.url} maxZoom={21} />
-              <MapClickHandler onMapClick={handleMapClick} onZoomChange={handleZoomChange} />
-              <MapViewController center={mapView} zoom={mapZoom} />
-
-              {bounds && (
-                <>
-                  <Rectangle
-                    bounds={bounds}
-                    pathOptions={{
-                      color: '#ffffff',
-                      weight: 2,
-                      fillColor: 'transparent',
-                      fillOpacity: 0,
-                    }}
-                  />
-                  <DarkOverlay bounds={bounds} />
-                  <DimensionLabels bounds={bounds} portalContainer={mapContainerRef.current} />
-                </>
-              )}
-
-              {center && (
-                <Marker position={center} icon={centerIcon}>
-                  <Popup>
-                    <div className="text-sm">
-                      <div className="font-medium">Střed výřezu</div>
-                      <div className="font-mono text-neutral-500">
-                        {center[0].toFixed(6)}, {center[1].toFixed(6)}
-                      </div>
-                    </div>
-                  </Popup>
-                </Marker>
-              )}
-            </MapContainer>
-
-            {/* Zoom info */}
+          <SelectionMap
+            mapView={mapView}
+            mapZoom={mapZoom}
+            tileUrl={selectedSource.url}
+            bounds={bounds}
+            center={center}
+            onMapClick={handleMapClick}
+            onZoomChange={handleZoomChange}
+          >
             <div className="absolute bottom-4 left-4 z-[1000] bg-black/70 text-white text-xs px-2 py-1 rounded">
               Zoom: {currentMapZoom}
             </div>
-          </div>
+          </SelectionMap>
 
           {/* Sidebar */}
           <div className="w-96 bg-neutral-800 border-l border-neutral-700 flex flex-col overflow-y-auto">

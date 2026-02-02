@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
+import { MapContainer, TileLayer, Rectangle, Marker, Popup } from 'react-leaflet';
 import { useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { getDistanceMeters, formatDistance } from '../utils';
@@ -194,4 +195,68 @@ export const MapViewController = ({ center, zoom }) => {
   }, [map, center, zoom]);
 
   return null;
+};
+
+/**
+ * Shared selection map component used by both TerrainModal and OrthoMapModal.
+ * Renders a Leaflet map with click-to-select, rectangle bounds, dark overlay,
+ * dimension labels, and a center marker.
+ *
+ * Props:
+ *   mapView, mapZoom - initial/controlled view position
+ *   tileUrl - tile layer URL template
+ *   bounds - [[lat1,lon1],[lat2,lon2]] selection rectangle (or null)
+ *   center - [lat,lng] selected center point (or null)
+ *   onMapClick(latlng) - called with [lat,lng] on map click
+ *   onZoomChange(zoom) - called when map zoom changes
+ *   children - extra overlay elements rendered inside the container div (outside MapContainer)
+ */
+export const SelectionMap = ({ mapView, mapZoom, tileUrl, bounds, center, onMapClick, onZoomChange, children }) => {
+  const mapContainerRef = useRef(null);
+
+  return (
+    <div className="flex-1 relative" ref={mapContainerRef}>
+      <MapContainer
+        center={mapView}
+        zoom={mapZoom}
+        className="w-full h-full"
+        zoomControl={false}
+      >
+        <TileLayer url={tileUrl} maxZoom={21} />
+        <MapClickHandler onMapClick={onMapClick} onZoomChange={onZoomChange} />
+        <MapViewController center={mapView} zoom={mapZoom} />
+
+        {bounds && (
+          <>
+            <Rectangle
+              bounds={bounds}
+              pathOptions={{
+                color: '#ffffff',
+                weight: 2,
+                fillColor: 'transparent',
+                fillOpacity: 0,
+              }}
+            />
+            <DarkOverlay bounds={bounds} />
+            <DimensionLabels bounds={bounds} portalContainer={mapContainerRef.current} />
+          </>
+        )}
+
+        {center && (
+          <Marker position={center} icon={centerIcon}>
+            <Popup>
+              <div className="text-sm">
+                <div className="font-medium">Střed výřezu</div>
+                <div className="font-mono text-neutral-500">
+                  {center[0].toFixed(6)}, {center[1].toFixed(6)}
+                </div>
+              </div>
+            </Popup>
+          </Marker>
+        )}
+      </MapContainer>
+
+      {children}
+    </div>
+  );
 };
