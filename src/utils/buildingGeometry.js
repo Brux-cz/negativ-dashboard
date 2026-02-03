@@ -2,12 +2,14 @@ import earcut from 'earcut';
 import { getDistanceMeters } from './geoUtils';
 
 /**
- * Convert lat/lon to local meters relative to the NW corner of bounds.
+ * Convert lat/lon to local meters centered at origin (matching PlaneGeometry).
  */
 const latLonToLocal = (lat, lon, bounds, realWidth, realHeight) => {
   const [[nLat, wLon], [sLat, eLon]] = bounds;
-  const x = (lon - wLon) / (eLon - wLon) * realWidth;
-  const y = (lat - nLat) / (sLat - nLat) * realHeight;
+  // Normalize to [0, realWidth] × [0, realHeight], then center
+  const x = (lon - wLon) / (eLon - wLon) * realWidth - realWidth / 2;
+  // Flip Y-axis: north=positive, south=negative (matching terrain rotation)
+  const y = -((lat - nLat) / (sLat - nLat) * realHeight - realHeight / 2);
   return [x, y];
 };
 
@@ -15,8 +17,12 @@ const latLonToLocal = (lat, lon, bounds, realWidth, realHeight) => {
  * Sample terrain height at a local (x, y) position from the height grid.
  */
 const sampleHeight = (x, y, heightData, resolution, realWidth, realHeight, verticalScale) => {
-  const col = Math.min(resolution - 1, Math.max(0, Math.floor(x / realWidth * (resolution - 1))));
-  const row = Math.min(resolution - 1, Math.max(0, Math.floor(y / realHeight * (resolution - 1))));
+  // Convert centered coordinates to [0, 1] range
+  const normX = (x + realWidth / 2) / realWidth;
+  const normY = (y + realHeight / 2) / realHeight;
+
+  const col = Math.min(resolution - 1, Math.max(0, Math.floor(normX * (resolution - 1))));
+  const row = Math.min(resolution - 1, Math.max(0, Math.floor(normY * (resolution - 1))));
   return heightData[row * resolution + col] * verticalScale;
 };
 
@@ -42,9 +48,9 @@ export const generateBuildingMeshData = (buildings, terrain, verticalScale = 1) 
       latLonToLocal(lat, lon, bounds, realWidth, realHeight)
     );
 
-    // Check if building is within bounds
+    // Check if building is within bounds (centered coordinates)
     const inBounds = localPoly.some(([x, y]) =>
-      x >= 0 && x <= realWidth && y >= 0 && y <= realHeight
+      x >= -realWidth/2 && x <= realWidth/2 && y >= -realHeight/2 && y <= realHeight/2
     );
     if (!inBounds) continue;
 
@@ -56,8 +62,11 @@ export const generateBuildingMeshData = (buildings, terrain, verticalScale = 1) 
     avgTerrainH /= localPoly.length;
 
     // Building height is relative to terrain, not absolute
-    const baseZ = avgTerrainH + building.minHeight;
-    const topZ = baseZ + (building.height - building.minHeight);
+    // Scale building heights to match terrain exaggeration.
+    // Both base elevation (minHeight) and body height must be scaled
+    // to maintain proper visual alignment with scaled terrain.
+    const baseZ = avgTerrainH + (building.minHeight * verticalScale);
+    const topZ = baseZ + ((building.height - building.minHeight) * verticalScale);
 
     // Triangulate the polygon for top/bottom caps
     const flatCoords = [];
