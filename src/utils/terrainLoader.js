@@ -1,5 +1,5 @@
 import { getCenteredBounds, getTilesForBounds } from './tileUtils';
-import { getDistanceMeters } from './geoUtils';
+import { getDistanceMeters, srcSampleIndex } from './geoUtils';
 import { elevationSource } from './constants';
 
 /**
@@ -80,16 +80,14 @@ export const loadTerrain = async ({ center, tileZoom, gridSize, meshResolution, 
   // Resample to mesh resolution
   const outputSize = meshResolution;
   const heightData = new Float32Array(outputSize * outputSize);
-  const scaleX = cropW / outputSize;
-  const scaleY = cropH / outputSize;
 
   let minHeight = Infinity;
   let maxHeight = -Infinity;
 
   for (let y = 0; y < outputSize; y++) {
     for (let x = 0; x < outputSize; x++) {
-      const srcX = Math.floor(x * scaleX);
-      const srcY = Math.floor(y * scaleY);
+      const srcX = srcSampleIndex(x, outputSize, cropW);
+      const srcY = srcSampleIndex(y, outputSize, cropH);
       const idx = (srcY * cropW + srcX) * 4;
 
       const r = imageData.data[idx];
