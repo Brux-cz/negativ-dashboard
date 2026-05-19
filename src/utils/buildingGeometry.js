@@ -22,7 +22,10 @@ const sampleHeight = (x, y, heightData, resolution, realWidth, realHeight, verti
   const normY = (y + realHeight / 2) / realHeight;
 
   const col = Math.min(resolution - 1, Math.max(0, Math.floor(normX * (resolution - 1))));
-  const row = Math.min(resolution - 1, Math.max(0, Math.floor(normY * (resolution - 1))));
+  // heightData row 0 = NORTH (terrainLoader image-pixel convention), but the
+  // local Y axis has north = +realHeight/2 (normY → 1). Invert so a northern
+  // footprint samples the northern terrain row, not the mirrored southern one.
+  const row = Math.min(resolution - 1, Math.max(0, Math.floor((1 - normY) * (resolution - 1))));
   return heightData[row * resolution + col] * verticalScale;
 };
 
