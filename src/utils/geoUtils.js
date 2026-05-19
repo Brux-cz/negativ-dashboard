@@ -30,3 +30,19 @@ export const formatDistance = (meters) => {
   }
   return `${Math.round(meters)} m`;
 };
+
+/**
+ * Map an output grid index to the nearest source-pixel index when resampling.
+ * Maps the full closed interval: index 0 → 0, index (outputSize-1) →
+ * (srcSize-1), so the south/east edge of a crop is fully sampled (the old
+ * `floor(i * srcSize/outputSize)` never reached the last source row/column).
+ *
+ * @param {number} i - output index (0 .. outputSize-1)
+ * @param {number} outputSize - number of output samples along the axis
+ * @param {number} srcSize - number of source pixels along the axis
+ * @returns {number} source index (0 .. srcSize-1)
+ */
+export const srcSampleIndex = (i, outputSize, srcSize) => {
+  if (outputSize <= 1) return 0;
+  return Math.round((i * (srcSize - 1)) / (outputSize - 1));
+};

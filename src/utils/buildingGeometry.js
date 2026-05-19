@@ -14,6 +14,22 @@ const latLonToLocal = (lat, lon, bounds, realWidth, realHeight) => {
 };
 
 /**
+ * Signed area of a 2D polygon (shoelace). poly = array of [x, y].
+ * > 0 for counter-clockwise winding, < 0 for clockwise.
+ * Used to make side-wall normals point outward regardless of how the
+ * OSM way happens to be wound (OSM does not guarantee orientation).
+ */
+export const signedPolygonArea = (poly) => {
+  let a = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const [x0, y0] = poly[i];
+    const [x1, y1] = poly[(i + 1) % poly.length];
+    a += x0 * y1 - x1 * y0;
+  }
+  return a / 2;
+};
+
+/**
  * Sample terrain height at a local (x, y) position from the height grid.
  */
 const sampleHeight = (x, y, heightData, resolution, realWidth, realHeight, verticalScale) => {
@@ -104,17 +120,24 @@ export const generateBuildingMeshData = (buildings, terrain, verticalScale = 1) 
     vertexOffset += n;
 
     // --- Side walls ---
+    // OSM ways have no guaranteed winding. Use the polygon's signed area to
+    // flip the edge-perpendicular so the wall normal always faces outward.
+    const winding = signedPolygonArea(localPoly) > 0 ? 1 : -1;
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
       const [x0, y0] = localPoly[i];
       const [x1, y1] = localPoly[j];
 
-      // Wall normal (pointing outward)
       const dx = x1 - x0;
       const dy = y1 - y0;
       const len = Math.sqrt(dx * dx + dy * dy);
-      const nx = -dy / len;
-      const ny = dx / len;
+      // Skip degenerate edges (adjacent duplicate OSM nodes) — would give
+      // 0/0 = NaN normals. osmLoader only strips the closing duplicate.
+      if (len < 1e-9) continue;
+
+      // Wall normal, winding-independent (signed-area sign → outward).
+      const nx = (winding * dy) / len;
+      const ny = (winding * -dx) / len;
 
       const wallStart = vertexOffset;
       // 4 vertices per wall quad
@@ -123,9 +146,16 @@ export const generateBuildingMeshData = (buildings, terrain, verticalScale = 1) 
       allPositions.push(x1, y1, topZ);   allNormals.push(nx, ny, 0);
       allPositions.push(x0, y0, topZ);   allNormals.push(nx, ny, 0);
 
-      // Two triangles
-      allIndices.push(wallStart, wallStart + 1, wallStart + 2);
-      allIndices.push(wallStart, wallStart + 2, wallStart + 3);
+      // Triangle index order must follow the winding so the geometric face
+      // normal matches the (outward) shading normal — otherwise CW walls
+      // render back-facing despite correct normals.
+      if (winding === 1) {
+        allIndices.push(wallStart, wallStart + 1, wallStart + 2);
+        allIndices.push(wallStart, wallStart + 2, wallStart + 3);
+      } else {
+        allIndices.push(wallStart, wallStart + 2, wallStart + 1);
+        allIndices.push(wallStart, wallStart + 3, wallStart + 2);
+      }
 
       vertexOffset += 4;
     }

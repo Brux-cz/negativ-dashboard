@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
-import { generateBuildingMeshData } from './buildingGeometry';
+import { generateBuildingMeshData, signedPolygonArea } from './buildingGeometry';
 import { exportTerrainOBJ, exportBuildingsOBJ } from './meshExporter';
+import { srcSampleIndex } from './geoUtils';
 
 /**
  * Orientation regression tests.
@@ -214,5 +215,168 @@ describe('terrain/building/ortho orientation', () => {
 
     // OpenGL/3ds Max: V=1 = top of texture = north content of ortho JPEG.
     expect(uvs[northIdx][1]).toBeCloseTo(1, 3);
+  });
+});
+
+describe('follow-up: wall normals & resampling', () => {
+  test('signedPolygonArea: kladná pro CCW, záporná pro CW, |area| správná', () => {
+    // CCW square in standard XY axes (x east, y north) → +area.
+    const ccw = [[0, 0], [10, 0], [10, 10], [0, 10]];
+    expect(signedPolygonArea(ccw)).toBeCloseTo(100, 6);
+    expect(signedPolygonArea([...ccw].reverse())).toBeCloseTo(-100, 6);
+  });
+
+  // Extract per-edge wall normals from generateBuildingMeshData output and
+  // check each points OUTWARD (dot with centroid→edge-midpoint > 0).
+  // Layout per building: top n verts, bottom n verts, then 4 verts per edge.
+  const wallsPointOutward = (poly) => {
+    const terrain = makeTerrain();
+    const building = {
+      id: 1,
+      polygon: poly,
+      height: 12,
+      minHeight: 0,
+      type: 'house',
+      levels: null,
+    };
+    const { positions } = generateBuildingMeshData([building], terrain, 1);
+    const { normals } = generateBuildingMeshData([building], terrain, 1);
+    const n = poly.length;
+
+    // centroid from the top-cap vertices (first n verts)
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0; i < n; i++) {
+      cx += positions[i * 3];
+      cy += positions[i * 3 + 1];
+    }
+    cx /= n;
+    cy /= n;
+
+    const results = [];
+    for (let e = 0; e < n; e++) {
+      const wb = 2 * n + e * 4; // first vertex of this wall quad
+      const x0 = positions[wb * 3];
+      const y0 = positions[wb * 3 + 1];
+      const x1 = positions[(wb + 1) * 3];
+      const y1 = positions[(wb + 1) * 3 + 1];
+      const mx = (x0 + x1) / 2;
+      const my = (y0 + y1) / 2;
+      const nx = normals[wb * 3];
+      const ny = normals[wb * 3 + 1];
+      results.push(nx * (mx - cx) + ny * (my - cy)); // >0 = outward
+    }
+    return results;
+  };
+
+  test('stěny budovy míří VEN pro CCW i CW OSM polygon', () => {
+    // squareBuilding order: (S,W)(S,E)(N,E)(N,W) — one winding…
+    const sq = squareBuilding(NORTH_LAT, MID_LON).polygon;
+    for (const d of wallsPointOutward(sq)) expect(d).toBeGreaterThan(0);
+    // …and the reverse winding must work identically.
+    for (const d of wallsPointOutward([...sq].reverse())) expect(d).toBeGreaterThan(0);
+  });
+
+  test('srcSampleIndex: krajní body dosáhnou celého cropu (off-by-one)', () => {
+    expect(srcSampleIndex(0, 256, 100)).toBe(0);
+    expect(srcSampleIndex(255, 256, 100)).toBe(99); // last output → last source
+  });
+
+  test('srcSampleIndex: guard pro outputSize <= 1 (žádné NaN/dělení nulou)', () => {
+    expect(srcSampleIndex(0, 1, 100)).toBe(0);
+  });
+
+  // Ray-casting point-in-polygon — valid for concave shapes (a vertex-average
+  // centroid is NOT a reliable "inside" reference for an L). poly = [[x,y]].
+  const pointInPoly = (px, py, poly) => {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i];
+      const [xj, yj] = poly[j];
+      if (((yi > py) !== (yj > py)) &&
+          (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  };
+
+  // Ground truth for the *rendered* triangle: read the index buffer, compute
+  // the geometric face normal from positions in actual index order, step a
+  // tiny amount along it from the wall midpoint, and require that point to be
+  // OUTSIDE the footprint while the opposite step is INSIDE. Concave-valid.
+  // Returns one boolean per wall triangle (true = correctly outward-facing).
+  const wallFacesOutward = (poly) => {
+    const terrain = makeTerrain();
+    const building = { id: 1, polygon: poly, height: 12, minHeight: 0, type: 'house', levels: null };
+    const { positions, indices } = generateBuildingMeshData([building], terrain, 1);
+    const n = poly.length;
+
+    // footprint polygon in local meters = the top-cap vertices (first n)
+    const localPoly = [];
+    for (let i = 0; i < n; i++) localPoly.push([positions[i * 3], positions[i * 3 + 1]]);
+
+    const ok = [];
+    const eps = 0.05; // meters; smaller than any edge (~tens of m)
+    for (let t = 0; t < indices.length; t += 3) {
+      const ia = indices[t];
+      const ib = indices[t + 1];
+      const ic = indices[t + 2];
+      if (ia < 2 * n || ib < 2 * n || ic < 2 * n) continue; // walls only
+      const ax = positions[ia * 3], ay = positions[ia * 3 + 1], az = positions[ia * 3 + 2];
+      const bx = positions[ib * 3], by = positions[ib * 3 + 1], bz = positions[ib * 3 + 2];
+      const cxx = positions[ic * 3], cyy = positions[ic * 3 + 1], cz = positions[ic * 3 + 2];
+      const e1 = [bx - ax, by - ay, bz - az];
+      const e2 = [cxx - ax, cyy - ay, cz - az];
+      let gnx = e1[1] * e2[2] - e1[2] * e2[1];
+      let gny = e1[2] * e2[0] - e1[0] * e2[2];
+      const glen = Math.hypot(gnx, gny) || 1;
+      gnx /= glen;
+      gny /= glen;
+      const mx = (ax + bx + cxx) / 3;
+      const my = (ay + by + cyy) / 3;
+      const outOk = !pointInPoly(mx + eps * gnx, my + eps * gny, localPoly);
+      const inOk = pointInPoly(mx - eps * gnx, my - eps * gny, localPoly);
+      ok.push(outOk && inOk);
+    }
+    return ok;
+  };
+
+  // Concave L-shaped footprint (vertices listed CCW in lon=x / lat=y).
+  const lShape = () => {
+    const d = 0.0003;
+    const cells = [[0, 0], [2, 0], [2, 1], [1, 1], [1, 2], [0, 2]];
+    return cells.map(([col, row]) => [NORTH_LAT + row * d, MID_LON + col * d]);
+  };
+
+  test('stěnové trojúhelníky navinuté VEN — čtverec i konkávní L, CCW i CW', () => {
+    for (const poly of [squareBuilding(NORTH_LAT, MID_LON).polygon, lShape()]) {
+      const a = wallFacesOutward(poly);
+      const b = wallFacesOutward([...poly].reverse());
+      expect(a.length).toBeGreaterThan(0);
+      expect(b.length).toBeGreaterThan(0);
+      expect(a.every(Boolean)).toBe(true);
+      expect(b.every(Boolean)).toBe(true);
+    }
+  });
+
+  test('degenerovaná hrana (duplicitní sousední vrchol) → žádné NaN normály', () => {
+    const terrain = makeTerrain();
+    const lat = NORTH_LAT;
+    const lon = MID_LON;
+    const dd = 0.0003;
+    // square with the first vertex duplicated consecutively (len=0 edge)
+    const poly = [
+      [lat - dd, lon - dd],
+      [lat - dd, lon - dd],
+      [lat - dd, lon + dd],
+      [lat + dd, lon + dd],
+      [lat + dd, lon - dd],
+    ];
+    const building = { id: 1, polygon: poly, height: 10, minHeight: 0, type: 'house', levels: null };
+    const { normals } = generateBuildingMeshData([building], terrain, 1);
+    for (let i = 0; i < normals.length; i++) {
+      expect(Number.isFinite(normals[i])).toBe(true);
+    }
   });
 });
