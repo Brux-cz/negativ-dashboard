@@ -59,8 +59,8 @@ const BuildingsMesh = ({ buildingMeshData }) => {
 
   if (!geometry) return null;
 
-  // Buildings use the same coordinate system as terrain (X=east, Y=south, Z=up)
-  // but terrain is rotated -90° around X, so buildings need the same rotation
+  // Buildings share the terrain's local frame (X=east, Y=north, Z=up,
+  // centered on origin), so they get the same -90° X rotation as the terrain.
   return (
     <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]}>
       <meshStandardMaterial color="#cccccc" flatShading />

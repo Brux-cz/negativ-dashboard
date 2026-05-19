@@ -232,7 +232,11 @@ export const TerrainModal = ({ isOpen, onClose }) => {
 
     // Buildings OBJ
     if (showBuildings && buildingMeshData && buildingMeshData.positions.length > 0) {
-      const buildingsOBJ = exportBuildingsOBJ(buildingMeshData);
+      const buildingsOBJ = exportBuildingsOBJ(
+        buildingMeshData,
+        sceneData.terrain.realWidth,
+        sceneData.terrain.realHeight,
+      );
       downloadBlob(buildingsOBJ, `${baseFilename}_buildings.obj`);
     }
   };
