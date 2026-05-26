@@ -18,15 +18,10 @@ export default function App() {
   const [showTerrainModal, setShowTerrainModal] = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
 
-  const [orthoShiftHeld, setOrthoShiftHeld] = useState(false);
-
-  const handleToolClick = (id, event) => {
+  const handleToolClick = (id) => {
     if (id === 'building-gen') setShowBuildingModal(true);
     else if (id === 'atmosphere') setShowAtmosphereModal(true);
-    else if (id === 'ortho') {
-      setOrthoShiftHeld(event?.shiftKey || false);
-      setShowOrthoModal(true);
-    }
+    else if (id === 'ortho') setShowOrthoModal(true);
     else if (id === 'terrain') setShowTerrainModal(true);
   };
 
@@ -98,7 +93,7 @@ export default function App() {
 
         {/* Tools Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-12">
-          {filteredTools.map(t => <ToolCard key={t.id} tool={t} onClick={(e) => handleToolClick(t.id, e)} />)}
+          {filteredTools.map(t => <ToolCard key={t.id} tool={t} onClick={() => handleToolClick(t.id)} />)}
         </div>
 
         {/* 3ds Max Scripts */}
@@ -146,7 +141,7 @@ export default function App() {
 
       <AIBuildingModal isOpen={showBuildingModal} onClose={() => setShowBuildingModal(false)} />
       <AtmosphereModal isOpen={showAtmosphereModal} onClose={() => setShowAtmosphereModal(false)} />
-      <OrthoMapModal isOpen={showOrthoModal} onClose={() => setShowOrthoModal(false)} shiftHeld={orthoShiftHeld} />
+      <OrthoMapModal isOpen={showOrthoModal} onClose={() => setShowOrthoModal(false)} />
       <TerrainModal isOpen={showTerrainModal} onClose={() => setShowTerrainModal(false)} />
     </div>
   );
